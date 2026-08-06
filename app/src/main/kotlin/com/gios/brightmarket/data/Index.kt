@@ -1,0 +1,91 @@
+package com.gios.brightmarket.data
+
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+
+/**
+ * One app as the index describes it. Everything here is derived by the index
+ * builder from the GitHub API -- nothing is hand-maintained except name,
+ * category and summary.
+ */
+data class App(
+    val pkg: String,
+    val name: String,
+    val repo: String,
+    val category: String,
+    val summary: String,
+    val version: String,
+    /**
+     * The trailing segment of the release tag (v1.3.18 -> 18), which every
+     * Bright app's CI stamps from its run number. This is compared against
+     * PackageManager's longVersionCode to decide "update available" -- it is
+     * NOT the human-facing version string.
+     */
+    val versionCode: Long,
+    val apkUrl: String,
+    val size: Long,
+    val sha256: String,
+    val publishedAt: String,
+    val notes: String,
+    val downloads: Int,
+    val firstSeen: String,
+)
+
+enum class Sort(val label: String) {
+    UPDATED("Updated"),
+    NEW("New"),
+    POPULAR("Popular"),
+}
+
+object Index {
+
+    fun parse(json: String): List<App> {
+        val root = JSONObject(json)
+        val arr = root.getJSONArray("apps")
+        return (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            val latest = o.getJSONObject("latest")
+            App(
+                pkg = o.getString("pkg"),
+                name = o.getString("name"),
+                repo = o.getString("repo"),
+                category = o.optString("category", "utilities"),
+                summary = o.optString("summary", ""),
+                version = latest.getString("version"),
+                versionCode = latest.getLong("versionCode"),
+                apkUrl = latest.getString("apk"),
+                size = latest.getLong("size"),
+                sha256 = latest.getString("sha256"),
+                publishedAt = latest.optString("published", ""),
+                notes = latest.optString("notes", ""),
+                downloads = o.optInt("downloads", 0),
+                firstSeen = o.optString("firstSeen", ""),
+            )
+        }
+    }
+
+    fun fetch(url: String): List<App> {
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 15_000
+            readTimeout = 30_000
+            setRequestProperty("Accept", "application/json")
+        }
+        try {
+            if (conn.responseCode !in 200..299) {
+                throw java.io.IOException("index returned HTTP ${conn.responseCode}")
+            }
+            return parse(conn.inputStream.bufferedReader().readText())
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    fun sort(apps: List<App>, by: Sort): List<App> = when (by) {
+        // ISO-8601 timestamps from the GitHub API, so lexicographic ordering is
+        // chronological and there is nothing to parse.
+        Sort.UPDATED -> apps.sortedByDescending { it.publishedAt }
+        Sort.NEW -> apps.sortedByDescending { it.firstSeen }
+        Sort.POPULAR -> apps.sortedByDescending { it.downloads }
+    }
+}
