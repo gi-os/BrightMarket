@@ -69,6 +69,10 @@ object Installer {
             onProgress(Progress.AwaitingConfirmation)
             commitSession(ctx, apk, pkg)
             apk.delete()
+            // delete() returns Boolean, which would make this Result<Boolean>.
+            // The contract is Result<Unit>, and whether the temp copy was still
+            // on disk is not something a caller should branch on.
+            Unit
         }.onFailure { onProgress(Progress.Failed(it.message ?: "install failed")) }
     }
 

@@ -2,6 +2,8 @@ package com.gios.brightmarket.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -11,6 +13,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import com.gios.brightmarket.data.App
@@ -53,6 +57,80 @@ fun SortRow(current: Sort, onSelect: (Sort) -> Unit) {
     }
 }
 
+/**
+ * LightTextField: an underline at 3 design px across 80% width, no filled
+ * container and no floating label. Material's decorated text fields appear
+ * nowhere in LightOS, so this is BasicTextField with the underline drawn on.
+ */
+@Composable
+fun SearchField(query: String, onQuery: (String) -> Unit) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = gridUnits(1f), vertical = gridUnits(0.4f))
+    ) {
+        BasicTextField(
+            value = query,
+            onValueChange = onQuery,
+            singleLine = true,
+            textStyle = androidx.compose.material3.MaterialTheme.typography.bodyLarge
+                .copy(color = Light.Content),
+            cursorBrush = SolidColor(Light.Content),
+            modifier = Modifier
+                .fillMaxWidth(0.8f)
+                .drawUnderline(),
+            decorationBox = { inner ->
+                Box(Modifier.padding(vertical = gridUnits(0.3f))) {
+                    if (query.isEmpty()) {
+                        Text(
+                            "Search",
+                            style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
+                            color = Light.ContentSecondary,
+                        )
+                    }
+                    inner()
+                }
+            },
+        )
+    }
+}
+
+private fun Modifier.drawUnderline(): Modifier =
+    drawBehind {
+        val y = size.height
+        drawLine(
+            color = androidx.compose.ui.graphics.Color(0xFFBBBBBB),
+            start = androidx.compose.ui.geometry.Offset(0f, y),
+            end = androidx.compose.ui.geometry.Offset(size.width, y),
+            strokeWidth = 3f,
+        )
+    }
+
+/**
+ * Categories scroll horizontally rather than wrapping: the LP3 panel is narrow,
+ * and a wrapping row would push the list itself below the fold as soon as a
+ * handful of categories exist.
+ */
+@Composable
+fun CategoryRow(categories: List<String>, current: String, onSelect: (String) -> Unit) {
+    LazyRow(
+        Modifier.fillMaxWidth().padding(vertical = gridUnits(0.4f)),
+        contentPadding = PaddingValues(horizontal = gridUnits(1f)),
+        horizontalArrangement = Arrangement.spacedBy(gridUnits(1.2f)),
+    ) {
+        items(categories) { category ->
+            val selected = category.equals(current, ignoreCase = true)
+            Text(
+                text = category.replaceFirstChar { it.uppercase() },
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                color = if (selected) Light.Content else Light.ContentSecondary,
+                modifier = Modifier.lightClickable { onSelect(category) },
+            )
+        }
+    }
+}
+
 @Composable
 fun AppRow(
     app: App,
@@ -86,20 +164,32 @@ fun AppRow(
 fun ListScreen(
     apps: List<App>,
     sort: Sort,
+    query: String,
+    category: String,
+    categories: List<String>,
     installed: Map<String, Long>,
     loading: Boolean,
     error: String?,
+    onQuery: (String) -> Unit,
+    onCategory: (String) -> Unit,
     onSort: (Sort) -> Unit,
     onOpen: (App) -> Unit,
     onImport: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize().background(Light.Background)) {
         TopBar("BRIGHTMARKET")
+        SearchField(query, onQuery)
+        if (categories.size > 1) CategoryRow(categories, category, onCategory)
         SortRow(sort, onSort)
+
+        val filtering = query.isNotBlank() || category != "All"
 
         when {
             loading && apps.isEmpty() -> Message("Loading…")
             error != null && apps.isEmpty() -> Message(error)
+            // Distinguish "nothing matched your filter" from "the index is
+            // empty" -- otherwise a typo looks like the store is broken.
+            apps.isEmpty() && filtering -> Message("Nothing matches that.")
             apps.isEmpty() -> Message("No apps yet.")
             else -> LazyColumn(Modifier.weight(1f)) {
                 items(apps, key = { it.pkg }) { app ->

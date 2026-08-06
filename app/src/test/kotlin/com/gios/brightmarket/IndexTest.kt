@@ -84,4 +84,52 @@ class IndexTest {
         assertEquals("gi-os/BrightTip", Obtainium.repoFromUrl("https://github.com/gi-os/BrightTip.git"))
         assertEquals(null, Obtainium.repoFromUrl("https://gitlab.com/a/b"))
     }
+
+    @Test fun `search matches name, summary and category`() {
+        val apps = Index.parse(sample)
+        assertEquals(1, Index.filter(apps, "tip").size)
+        assertEquals(1, Index.filter(apps, "white noise").size)   // summary
+        assertEquals(1, Index.filter(apps, "media").size)         // category
+        assertEquals(2, Index.filter(apps, "").size)              // blank is a no-op
+    }
+
+    @Test fun `search matches the applicationId, which still says light`() {
+        // Half the portfolio is still com.gios.light* after the Bright rename.
+        // Someone typing "light" must still find those apps.
+        val apps = Index.parse(sample)
+        assertEquals(2, Index.filter(apps, "light").size)
+        assertEquals(1, Index.filter(apps, "com.gios.lighttip").size)
+    }
+
+    @Test fun `search is case and whitespace insensitive`() {
+        val apps = Index.parse(sample)
+        assertEquals(1, Index.filter(apps, "  BRIGHTtip  ").size)
+    }
+
+    @Test fun `category filter narrows, and All does not`() {
+        val apps = Index.parse(sample)
+        assertEquals(2, Index.filter(apps, "", Index.ALL).size)
+        assertEquals(1, Index.filter(apps, "", "media").size)
+        assertEquals(0, Index.filter(apps, "", "games").size)
+    }
+
+    @Test fun `query and category combine rather than override`() {
+        val apps = Index.parse(sample)
+        // "tip" exists, but not inside the media category.
+        assertEquals(0, Index.filter(apps, "tip", "media").size)
+        assertEquals(1, Index.filter(apps, "tip", "productivity").size)
+    }
+
+    @Test fun `categories lists All first, then every category present`() {
+        val cats = Index.categories(Index.parse(sample))
+        assertEquals(Index.ALL, cats.first())
+        assertTrue(cats.containsAll(listOf("media", "productivity")))
+        // No duplicates, and nothing invented.
+        assertEquals(cats.size, cats.distinct().size)
+    }
+
+    @Test fun `filtering an empty index is safe`() {
+        assertEquals(0, Index.filter(emptyList(), "anything").size)
+        assertEquals(listOf(Index.ALL), Index.categories(emptyList()))
+    }
 }

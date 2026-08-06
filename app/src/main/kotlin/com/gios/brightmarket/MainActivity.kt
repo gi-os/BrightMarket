@@ -28,6 +28,8 @@ class MainActivity : ComponentActivity() {
     private var error by mutableStateOf<String?>(null)
     private var sort by mutableStateOf(Sort.UPDATED)
     private var selected by mutableStateOf<App?>(null)
+    private var query by mutableStateOf("")
+    private var category by mutableStateOf(Index.ALL)
     private var progress by mutableStateOf<Installer.Progress?>(null)
     private var installed by mutableStateOf<Map<String, Long>>(emptyMap())
 
@@ -69,11 +71,18 @@ class MainActivity : ComponentActivity() {
                 val app = selected
                 if (app == null) {
                     ListScreen(
-                        apps = Index.sort(apps, sort),
+                        // Filter first, then sort: sorting the whole index and
+                        // then filtering would do the expensive half twice.
+                        apps = Index.sort(Index.filter(apps, query, category), sort),
                         sort = sort,
+                        query = query,
+                        category = category,
+                        categories = Index.categories(apps),
                         installed = installed,
                         loading = loading,
                         error = error,
+                        onQuery = { query = it },
+                        onCategory = { category = it },
                         onSort = { sort = it },
                         onOpen = { selected = it; progress = null },
                         onImport = { pickExport.launch(arrayOf("application/json", "text/plain", "*/*")) },

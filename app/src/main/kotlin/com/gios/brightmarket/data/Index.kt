@@ -81,6 +81,36 @@ object Index {
         }
     }
 
+    /** "All" plus every category actually present, so the row never offers an
+     *  empty filter and never hides a category someone submitted. */
+    fun categories(apps: List<App>): List<String> =
+        listOf(ALL) + apps.map { it.category }.distinct().sorted()
+
+    const val ALL = "All"
+
+    /**
+     * Free-text search across the fields a person would actually type: the
+     * name, the summary, the category, and the applicationId. The applicationId
+     * is included deliberately -- half these apps are still `com.gios.light*`
+     * after the Bright rename, so someone searching "light" should still find
+     * them rather than getting nothing.
+     *
+     * Blank query and [ALL] category are both no-ops, so this is safe to call
+     * unconditionally on every recomposition.
+     */
+    fun filter(apps: List<App>, query: String, category: String = ALL): List<App> {
+        val q = query.trim().lowercase()
+        return apps.filter { app ->
+            val matchesCategory = category == ALL || app.category.equals(category, true)
+            val matchesQuery = q.isEmpty() ||
+                app.name.lowercase().contains(q) ||
+                app.summary.lowercase().contains(q) ||
+                app.category.lowercase().contains(q) ||
+                app.pkg.lowercase().contains(q)
+            matchesCategory && matchesQuery
+        }
+    }
+
     fun sort(apps: List<App>, by: Sort): List<App> = when (by) {
         // ISO-8601 timestamps from the GitHub API, so lexicographic ordering is
         // chronological and there is nothing to parse.
