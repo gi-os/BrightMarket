@@ -55,6 +55,11 @@ android {
         compose = true
         buildConfig = true
     }
+    // org.json ships in android.jar as method stubs that throw. isReturnDefaultValues
+    // turns those throws into silent nulls, which is worse -- every JSON parse
+    // returns null and the tests NPE far from the cause. The real fix is putting an
+    // actual org.json implementation on the unit-test classpath (see dependencies),
+    // which shadows the stubs; this flag stays only for the rest of android.jar.
     testOptions { unitTests.isReturnDefaultValues = true }
 }
 
@@ -78,4 +83,8 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.0.21")
+    // Real org.json for JVM tests, shadowing android.jar's stubs. Without this
+    // Index.parse and Obtainium.parse return null under test while working fine
+    // on device -- the tests would be measuring the stub, not the code.
+    testImplementation("org.json:json:20240303")
 }
