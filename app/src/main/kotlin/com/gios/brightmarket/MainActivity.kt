@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import androidx.core.content.ContextCompat
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -142,6 +143,29 @@ class MainActivity : ComponentActivity() {
             appName = "BrightMarket",
             label = "market",
             token = BuildConfig.REPORT_TOKEN,
+        )
+
+        // Registered for the activity's whole life, not just while resumed.
+        // The system installer is a full activity, so BrightMarket is STOPPED
+        // for the entire install -- a receiver tied to the resumed state gets
+        // unregistered at precisely the moment the package broadcast fires,
+        // which is why the installed list still wasn't updating.
+        ContextCompat.registerReceiver(
+            this,
+            packageWatcher,
+            IntentFilter().apply {
+                addAction(Intent.ACTION_PACKAGE_ADDED)
+                addAction(Intent.ACTION_PACKAGE_REPLACED)
+                addAction(Intent.ACTION_PACKAGE_REMOVED)
+                // Without the data scheme these are never delivered at all:
+                // package broadcasts carry a package: URI, and a filter with no
+                // scheme matches none of them.
+                addDataScheme("package")
+            },
+            // targetSdk 35 requires an explicit export flag on runtime
+            // receivers. These are protected system broadcasts -- nothing
+            // outside the system can send them -- so NOT_EXPORTED is right.
+            ContextCompat.RECEIVER_NOT_EXPORTED,
         )
 
         followed = Followed.all(this)
@@ -288,25 +312,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        registerReceiver(
-            packageWatcher,
-            IntentFilter().apply {
-                addAction(Intent.ACTION_PACKAGE_ADDED)
-                addAction(Intent.ACTION_PACKAGE_REPLACED)
-                addAction(Intent.ACTION_PACKAGE_REMOVED)
-                // Without the data scheme these actions are never delivered:
-                // package broadcasts carry a package: URI and a filter with no
-                // scheme matches none of them.
-                addDataScheme("package")
-            },
-        )
-        // Coming back from the system installer dialog is exactly when installed
-        // versions change, and what moves a row out of "needs update".
+        // Belt and braces alongside the broadcast: cheap, and covers a return
+        // from anywhere the receiver couldn't observe.
         refreshInstalled()
     }
 
-    override fun onPause() {
-        super.onPause()
+    override fun onDestroy() {
+        super.onDestroy()
         runCatching { unregisterReceiver(packageWatcher) }
     }
 

@@ -4,6 +4,14 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.6
+
+**Installed apps really do move into the installed section now.** The previous
+fix listened for the package event but registered the listener only while the
+app was on screen — and the system installer is a full screen, so BrightMarket
+is stopped for the entire install. The listener was unregistered at exactly the
+moment the event fired. It now lives for as long as the screen does.
+
 ## v1.5
 
 **Installed apps now actually move into the installed section.** Returning from
