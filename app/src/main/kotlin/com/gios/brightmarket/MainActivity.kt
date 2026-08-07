@@ -1,5 +1,6 @@
 package com.gios.brightmarket
 
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -8,22 +9,17 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.weight
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import com.gios.brightmarket.data.App
+import com.gios.brightmarket.data.Focus
 import com.gios.brightmarket.data.Index
 import com.gios.brightmarket.data.Obtainium
 import com.gios.brightmarket.data.Sort
 import com.gios.brightmarket.install.Installer
-import com.gios.brightmarket.ui.BrightMarketTheme
-import com.gios.brightmarket.ui.DetailScreen
-import com.gios.brightmarket.ui.Light
-import com.gios.brightmarket.ui.ListScreen
-import com.gios.brightmarket.ui.Tab
-import com.gios.brightmarket.ui.TabBar
-import com.gios.brightmarket.ui.TopBar
-import com.gios.brightmarket.ui.UpdatesScreen
+import com.gios.brightmarket.ui.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -35,22 +31,26 @@ class MainActivity : ComponentActivity() {
     private var error by mutableStateOf<String?>(null)
     private var sort by mutableStateOf(Sort.UPDATED)
     private var selected by mutableStateOf<App?>(null)
-    private var tab by mutableStateOf(Tab.BROWSE)
+    private var tabIndex by mutableStateOf(0)
     private var query by mutableStateOf("")
     private var category by mutableStateOf(Index.ALL)
     private var installed by mutableStateOf<Map<String, Long>>(emptyMap())
 
-    /** Progress for the app open on the detail screen. */
+    private var onboarded by mutableStateOf(false)
+    private var focusMode by mutableStateOf(false)
+    private var confirmingFocusOff by mutableStateOf(false)
+
     private var progress by mutableStateOf<Installer.Progress?>(null)
 
     /**
-     * Progress keyed by package, for the Updates tab. "Update all" runs several
-     * installs in sequence, and one shared field would make every row display
-     * whichever install reported last.
+     * Progress keyed by package. "Update all" runs several installs and one
+     * shared field would make every row show whichever reported last.
      */
     private var progressFor by mutableStateOf<Map<String, Installer.Progress>>(emptyMap())
 
-    /** Obtainium exports are picked with SAF -- no storage permission needed. */
+    /** A package named by a QR link, opened once the index has loaded. */
+    private var pendingPkg: String? = null
+
     private val pickExport = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -69,13 +69,9 @@ class MainActivity : ComponentActivity() {
                 toast("That doesn't look like an Obtainium export.")
                 return@launch
             }
-            // Say plainly what did NOT come across, rather than reporting a
-            // cheerful count and quietly dropping the rest.
             val msg = buildString {
                 append("${result.matched.size} of ${result.matched.size + result.unmatched.size} already in BrightMarket")
-                if (result.unmatched.isNotEmpty()) {
-                    append("; ${result.unmatched.size} not indexed yet")
-                }
+                if (result.unmatched.isNotEmpty()) append("; ${result.unmatched.size} not indexed yet")
             }
             toast(msg)
         }
@@ -83,11 +79,22 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        onboarded = Focus.onboarded(this)
+        focusMode = Focus.enabled(this)
+        handleLink(intent)
+
         setContent {
             BrightMarketTheme {
-                val app = selected
-                val (updates, upToDate) = Index.partitionInstalled(apps, installed, packageName)
+                if (!onboarded) {
+                    OnboardingScreen { focus ->
+                        Focus.choose(this, focus)
+                        focusMode = focus
+                        onboarded = true
+                    }
+                    return@BrightMarketTheme
+                }
 
+                val app = selected
                 if (app != null) {
                     DetailScreen(
                         app = app,
@@ -99,55 +106,139 @@ class MainActivity : ComponentActivity() {
                     return@BrightMarketTheme
                 }
 
+                val (updates, upToDate) = Index.partitionInstalled(apps, installed, packageName)
+
+                // Three destinations, which is the SDK's hard ceiling for a
+                // bottom bar containing any text item.
+                val tabs = if (focusMode) {
+                    listOf("Installed", "Updates", "Settings")
+                } else {
+                    listOf("Browse", "Updates", "Settings")
+                }
+                val index = tabIndex.coerceIn(0, tabs.lastIndex)
+
                 Column(Modifier.fillMaxSize().background(Light.Background)) {
                     TopBar("BRIGHTMARKET")
-                    TabBar(tab, updates.size) { tab = it }
 
-                    when (tab) {
-                        Tab.BROWSE -> ListScreen(
-                            // Filter first, then sort: sorting the whole index
-                            // and then filtering would do the expensive half
-                            // twice.
-                            apps = Index.sort(Index.filter(apps, query, category), sort),
-                            sort = sort,
-                            query = query,
-                            category = category,
-                            categories = Index.categories(apps),
-                            installed = installed,
-                            loading = loading,
-                            error = error,
-                            onQuery = { query = it },
-                            onCategory = { category = it },
-                            onSort = { sort = it },
-                            onOpen = { selected = it; progress = null },
-                            onImport = {
-                                pickExport.launch(
-                                    arrayOf("application/json", "text/plain", "*/*")
+                    Column(Modifier.weight(1f)) {
+                        when (index) {
+                            0 -> if (focusMode) {
+                                // Focus mode: only what is already on the phone.
+                                // No search, no categories, no way to encounter
+                                // an app you don't own.
+                                UpdatesScreen(
+                                    updates = updates,
+                                    upToDate = upToDate,
+                                    progressFor = progressFor,
+                                    loading = loading,
+                                    focusMode = true,
+                                    onUpdateAll = { updateAll(updates.map { it.app }) },
+                                    onOpen = { selected = it; progress = null },
                                 )
-                            },
-                        )
+                            } else {
+                                BrowseScreen(
+                                    apps = Index.sort(Index.filter(apps, query, category), sort),
+                                    sort = sort,
+                                    query = query,
+                                    category = category,
+                                    categories = Index.categories(apps),
+                                    installed = installed,
+                                    loading = loading,
+                                    error = error,
+                                    onQuery = { query = it },
+                                    onCategory = { category = it },
+                                    onSort = { sort = it },
+                                    onOpen = { selected = it; progress = null },
+                                )
+                            }
 
-                        Tab.UPDATES -> UpdatesScreen(
-                            updates = updates,
-                            upToDate = upToDate,
-                            progressFor = progressFor,
-                            loading = loading,
-                            onUpdateAll = { updateAll(updates.map { it.app }) },
-                            onOpen = { selected = it; progress = null },
-                        )
+                            1 -> UpdatesScreen(
+                                updates = updates,
+                                upToDate = upToDate,
+                                progressFor = progressFor,
+                                loading = loading,
+                                focusMode = focusMode,
+                                onUpdateAll = { updateAll(updates.map { it.app }) },
+                                onOpen = { selected = it; progress = null },
+                            )
+
+                            else -> SettingsScreen(
+                                focusEnabled = focusMode,
+                                confirmingFocusOff = confirmingFocusOff,
+                                onToggleFocus = {
+                                    if (focusMode) {
+                                        // Only leaving needs a pause. Entering
+                                        // is instant -- friction there would
+                                        // discourage the choice this exists for.
+                                        confirmingFocusOff = true
+                                    } else {
+                                        Focus.setEnabled(this@MainActivity, true)
+                                        focusMode = true
+                                        tabIndex = 0
+                                    }
+                                },
+                                onConfirmFocusOff = {
+                                    Focus.setEnabled(this@MainActivity, false)
+                                    focusMode = false
+                                    confirmingFocusOff = false
+                                },
+                                onCancelFocusOff = { confirmingFocusOff = false },
+                                onImport = {
+                                    pickExport.launch(
+                                        arrayOf("application/json", "text/plain", "*/*")
+                                    )
+                                },
+                            )
+                        }
                     }
+
+                    BottomBar(tabs, index) { tabIndex = it }
                 }
             }
         }
         refresh()
     }
 
+    /** QR links arrive while the app is already open far more often than not. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleLink(intent)
+    }
+
     override fun onResume() {
         super.onResume()
-        // Re-read installed versions on every resume: coming back from the
-        // system installer dialog is exactly when they change, and it is what
-        // moves a row from "update" to "up to date".
+        // Coming back from the system installer dialog is exactly when installed
+        // versions change, and what moves a row out of "needs update".
         refreshInstalled()
+    }
+
+    /**
+     * Act on a scanned `brightmarket://` link.
+     *
+     * BrightMarket never opens the camera. The phone already has a QR scanner
+     * (Roll), and bundling CameraX plus a decoder here would duplicate it for
+     * one screen — and require a camera permission this app has no other reason
+     * to hold. Scanning with Roll fires this intent instead.
+     */
+    private fun handleLink(intent: Intent?) {
+        val data = intent?.data?.toString() ?: return
+        when (val link = Focus.parseLink(data)) {
+            is Focus.Link.OpenApp -> {
+                // The index may not have loaded yet; remember it and open once
+                // it has, rather than silently dropping the scan.
+                val match = apps.firstOrNull { it.pkg == link.pkg }
+                if (match != null) selected = match else pendingPkg = link.pkg
+            }
+            is Focus.Link.SetFocus -> {
+                Focus.setEnabled(this, link.on)
+                focusMode = link.on
+                onboarded = true
+                tabIndex = 0
+                toast(if (link.on) "Focus mode on." else "Focus mode off.")
+            }
+            null -> Unit  // not ours; a QR scanner decodes all sorts of things
+        }
     }
 
     private fun refresh() {
@@ -155,7 +246,15 @@ class MainActivity : ComponentActivity() {
             loading = true
             error = null
             runCatching { withContext(Dispatchers.IO) { Index.fetch(BuildConfig.INDEX_URL) } }
-                .onSuccess { apps = it; refreshInstalled() }
+                .onSuccess {
+                    apps = it
+                    refreshInstalled()
+                    pendingPkg?.let { pkg ->
+                        selected = apps.firstOrNull { a -> a.pkg == pkg }
+                        if (selected == null) toast("That app isn't in the index.")
+                        pendingPkg = null
+                    }
+                }
                 .onFailure { error = "Couldn't reach the index. Check your connection." }
             loading = false
         }
@@ -182,11 +281,9 @@ class MainActivity : ComponentActivity() {
     /**
      * Update several apps one at a time.
      *
-     * Deliberately sequential. Each install ends in the system's confirmation
-     * dialog, and firing them in parallel would stack those dialogs on top of
-     * each other -- the user would tap through a pile of prompts with no idea
-     * which app each one belongs to. It also keeps only one download on the
-     * wire, which matters on the LP3's connection.
+     * Sequential on purpose: each install ends at the system confirmation
+     * dialog, and parallel installs would stack those prompts with no
+     * indication which app each belongs to.
      */
     private fun updateAll(targets: List<App>) {
         lifecycleScope.launch {
@@ -200,9 +297,6 @@ class MainActivity : ComponentActivity() {
                     pkg = app.pkg,
                     onProgress = { p -> progressFor = progressFor + (app.pkg to p) },
                 )
-                // Clear this app's indicator whatever happened. A failure is
-                // already reported by the installer's own broadcast, and leaving
-                // a stale "Downloading 100%" on the row is worse than nothing.
                 progressFor = progressFor - app.pkg
             }
             refreshInstalled()

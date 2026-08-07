@@ -16,12 +16,25 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:label="Market"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.BrightMarket">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- QR codes from the desktop catalogue carry brightmarket:// links.
+                 BrightMarket never opens the camera itself: the phone already
+                 has a QR scanner (Roll), so scanning there fires this intent.
+                 That avoids bundling CameraX and a decoder, and avoids holding
+                 a camera permission this app has no other reason to want. -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="brightmarket" />
             </intent-filter>
         </activity>
 

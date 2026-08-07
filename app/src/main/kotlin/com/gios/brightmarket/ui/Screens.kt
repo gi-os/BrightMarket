@@ -1,20 +1,22 @@
 package com.gios.brightmarket.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -23,70 +25,98 @@ import com.gios.brightmarket.data.Installed
 import com.gios.brightmarket.data.Sort
 import com.gios.brightmarket.install.Installer
 
-@Composable
-fun TopBar(title: String) {
-    // LightGrid: top bar is 3 units tall with a 1-unit horizontal inset, and is
-    // separated from content by space rather than a divider.
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(gridUnits(3f))
-            .padding(horizontal = gridUnits(1f)),
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        Text(title, style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
-    }
-}
+// ---------------------------------------------------------------------------
+// Chrome
+// ---------------------------------------------------------------------------
 
+/**
+ * LightGrid top bar: 3 units tall, 1-unit inset, title set in `fine`. LightOS
+ * bars are separated from content by space, never by a divider line.
+ */
 @Composable
-fun SortRow(current: Sort, onSelect: (Sort) -> Unit) {
+fun TopBar(title: String, onBack: (() -> Unit)? = null) {
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = gridUnits(1f), vertical = gridUnits(0.5f)),
-        horizontalArrangement = Arrangement.spacedBy(gridUnits(1.5f)),
+            .height(gridUnits(Grid.TOP_BAR))
+            .padding(horizontal = gridUnits(Grid.INSET)),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Sort.entries.forEach { sort ->
-            val selected = sort == current
+        if (onBack != null) {
             Text(
-                text = sort.label,
-                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                color = if (selected) Light.Content else Light.ContentSecondary,
-                modifier = Modifier.lightClickable { onSelect(sort) },
+                "<",
+                style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier
+                    .lightClickable(onClick = onBack)
+                    .padding(end = gridUnits(0.6f)),
             )
         }
+        Text(title, style = MaterialTheme.typography.labelMedium)
     }
 }
 
 /**
- * LightTextField: an underline at 3 design px across 80% width, no filled
- * container and no floating label. Material's decorated text fields appear
- * nowhere in LightOS, so this is BasicTextField with the underline drawn on.
+ * LightBottomBar — LightOS's ActionBar. 4 units tall, at the BOTTOM, labels in
+ * `button` (15% tracking). The SDK allows up to 5 icon items but only 3 when
+ * any item is text, so this app has exactly three destinations and no more.
  */
+@Composable
+fun BottomBar(items: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(gridUnits(Grid.BOTTOM_BAR))
+            .padding(horizontal = gridUnits(Grid.INSET)),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        items.forEachIndexed { i, label ->
+            Box(
+                Modifier
+                    .weight(1f)
+                    .lightClickable { onSelect(i) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    label.uppercase(),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (i == selected) Light.Content else Light.ContentSecondary,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+/** LightTextField: a 3-design-px underline across 80% width. No filled box. */
 @Composable
 fun SearchField(query: String, onQuery: (String) -> Unit) {
     Box(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = gridUnits(1f), vertical = gridUnits(0.4f))
+            .padding(horizontal = gridUnits(Grid.INSET), vertical = gridUnits(0.4f))
     ) {
         BasicTextField(
             value = query,
             onValueChange = onQuery,
             singleLine = true,
-            textStyle = androidx.compose.material3.MaterialTheme.typography.bodyLarge
-                .copy(color = Light.Content),
+            textStyle = MaterialTheme.typography.bodyLarge.copy(color = Light.Content),
             cursorBrush = SolidColor(Light.Content),
             modifier = Modifier
                 .fillMaxWidth(0.8f)
-                .drawUnderline(),
+                .drawBehind {
+                    drawLine(
+                        color = Light.ContentSecondary,
+                        start = Offset(0f, size.height),
+                        end = Offset(size.width, size.height),
+                        strokeWidth = 3f,
+                    )
+                },
             decorationBox = { inner ->
                 Box(Modifier.padding(vertical = gridUnits(0.3f))) {
                     if (query.isEmpty()) {
                         Text(
                             "Search",
-                            style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
+                            style = MaterialTheme.typography.bodyLarge,
                             color = Light.ContentSecondary,
                         )
                     }
@@ -97,34 +127,182 @@ fun SearchField(query: String, onQuery: (String) -> Unit) {
     }
 }
 
-private fun Modifier.drawUnderline(): Modifier =
-    drawBehind {
-        val y = size.height
-        drawLine(
-            color = androidx.compose.ui.graphics.Color(0xFFBBBBBB),
-            start = androidx.compose.ui.geometry.Offset(0f, y),
-            end = androidx.compose.ui.geometry.Offset(size.width, y),
-            strokeWidth = 3f,
-        )
-    }
+// ---------------------------------------------------------------------------
+// Onboarding
+// ---------------------------------------------------------------------------
 
 /**
- * Categories scroll horizontally rather than wrapping: the LP3 panel is narrow,
- * and a wrapping row would push the list itself below the fold as soon as a
- * handful of categories exist.
+ * Shown once, before the app is usable. The two modes are a real choice about
+ * how the phone behaves, so it is made deliberately rather than defaulted into
+ * — the whole point of focus mode is lost if you arrive in browsing mode
+ * without having decided.
  */
+@Composable
+fun OnboardingScreen(onChoose: (focus: Boolean) -> Unit) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Light.Background)
+            .verticalScroll(rememberScrollState()),
+    ) {
+        TopBar("BRIGHTMARKET")
+        Column(Modifier.padding(horizontal = gridUnits(Grid.INSET))) {
+            Text("How do you want to use this?", style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(gridUnits(1.5f)))
+
+            Choice(
+                title = "Browse here",
+                body = "Search and discover apps on the phone. Everything works offline.",
+                onClick = { onChoose(false) },
+            )
+            Spacer(Modifier.height(gridUnits(1.5f)))
+            Choice(
+                title = "Focus mode",
+                body = "No browsing on the phone. You discover apps on a desktop and " +
+                    "send them over by QR code. Your installed apps and their updates " +
+                    "stay available here.",
+                onClick = { onChoose(true) },
+            )
+
+            Spacer(Modifier.height(gridUnits(1.5f)))
+            Text(
+                "You can change this later in Settings.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Light.ContentSecondary,
+            )
+            Spacer(Modifier.height(gridUnits(2f)))
+        }
+    }
+}
+
+@Composable
+private fun Choice(title: String, body: String, onClick: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .lightClickable(onClick = onClick)
+            .padding(vertical = gridUnits(0.6f))
+    ) {
+        Text(title.uppercase(), style = MaterialTheme.typography.labelLarge)
+        Spacer(Modifier.height(gridUnits(0.3f)))
+        Text(body, style = MaterialTheme.typography.bodySmall, color = Light.ContentSecondary)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------
+
+@Composable
+fun SettingsScreen(
+    focusEnabled: Boolean,
+    confirmingFocusOff: Boolean,
+    onToggleFocus: () -> Unit,
+    onConfirmFocusOff: () -> Unit,
+    onCancelFocusOff: () -> Unit,
+    onImport: () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Light.Background)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = gridUnits(Grid.INSET)),
+    ) {
+        Spacer(Modifier.height(gridUnits(1f)))
+        Text("FOCUS MODE", style = MaterialTheme.typography.titleMedium, color = Light.ContentSecondary)
+        Spacer(Modifier.height(gridUnits(0.4f)))
+        Text(
+            if (focusEnabled) {
+                "On. Browsing is off. Apps arrive by QR from the desktop."
+            } else {
+                "Off. You can browse and search on the phone."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = Light.ContentSecondary,
+        )
+        Spacer(Modifier.height(gridUnits(0.6f)))
+
+        if (confirmingFocusOff) {
+            // Leaving focus mode is the direction that needs a pause. Turning it
+            // ON is instant -- friction there would only discourage the choice
+            // the feature exists to support.
+            Text(
+                "Turn browsing back on?",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Spacer(Modifier.height(gridUnits(0.4f)))
+            Row {
+                Text(
+                    "YES, TURN OFF",
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.lightClickable(onClick = onConfirmFocusOff),
+                )
+                Spacer(Modifier.width(gridUnits(1.5f)))
+                Text(
+                    "CANCEL",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Light.ContentSecondary,
+                    modifier = Modifier.lightClickable(onClick = onCancelFocusOff),
+                )
+            }
+        } else {
+            Text(
+                if (focusEnabled) "TURN OFF" else "TURN ON",
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.lightClickable(onClick = onToggleFocus),
+            )
+        }
+
+        Spacer(Modifier.height(gridUnits(2f)))
+        Text("IMPORT", style = MaterialTheme.typography.titleMedium, color = Light.ContentSecondary)
+        Spacer(Modifier.height(gridUnits(0.4f)))
+        Text(
+            "Import from Obtainium",
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.lightClickable(onClick = onImport),
+        )
+        Spacer(Modifier.height(gridUnits(2f)))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Lists
+// ---------------------------------------------------------------------------
+
+@Composable
+fun SortRow(current: Sort, onSelect: (Sort) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = gridUnits(Grid.INSET), vertical = gridUnits(0.5f)),
+        horizontalArrangement = Arrangement.spacedBy(gridUnits(1.5f)),
+    ) {
+        Sort.entries.forEach { sort ->
+            val selected = sort == current
+            Text(
+                text = sort.label,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                color = if (selected) Light.Content else Light.ContentSecondary,
+                modifier = Modifier.lightClickable { onSelect(sort) },
+            )
+        }
+    }
+}
+
 @Composable
 fun CategoryRow(categories: List<String>, current: String, onSelect: (String) -> Unit) {
     LazyRow(
         Modifier.fillMaxWidth().padding(vertical = gridUnits(0.4f)),
-        contentPadding = PaddingValues(horizontal = gridUnits(1f)),
+        contentPadding = PaddingValues(horizontal = gridUnits(Grid.INSET)),
         horizontalArrangement = Arrangement.spacedBy(gridUnits(1.2f)),
     ) {
         items(categories) { category ->
             val selected = category.equals(current, ignoreCase = true)
             Text(
                 text = category.replaceFirstChar { it.uppercase() },
-                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodySmall,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                 color = if (selected) Light.Content else Light.ContentSecondary,
                 modifier = Modifier.lightClickable { onSelect(category) },
@@ -133,27 +311,17 @@ fun CategoryRow(categories: List<String>, current: String, onSelect: (String) ->
     }
 }
 
+/** List rows are `copy` over `detail` — the SDK's own convention. */
 @Composable
-fun AppRow(
-    app: App,
-    installedVersionCode: Long?,
-    onClick: () -> Unit,
-) {
-    // LightOS list rows are `copy` over `detail`.
+fun AppRow(app: App, installedVersionCode: Long?, onClick: () -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
             .lightClickable(onClick = onClick)
-            .padding(horizontal = gridUnits(1f), vertical = gridUnits(0.8f))
+            .padding(horizontal = gridUnits(Grid.INSET), vertical = gridUnits(0.8f))
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                app.name,
-                style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
-            )
-            // State reads before the name is finished, and reads without
-            // colour -- there is no accent in the palette, and the panel is
-            // greyscale anyway, so a coloured dot would say nothing.
+            Text(app.name, style = MaterialTheme.typography.bodyLarge)
             val tag = when {
                 installedVersionCode == null -> null
                 app.versionCode > installedVersionCode -> "UPDATE"
@@ -163,24 +331,19 @@ fun AppRow(
                 Spacer(Modifier.width(gridUnits(0.5f)))
                 Text(
                     tag,
-                    style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelSmall,
                     color = if (tag == "UPDATE") Light.Content else Light.ContentSecondary,
                 )
             }
         }
-        val status = when {
-            installedVersionCode == null -> app.summary
-            app.versionCode > installedVersionCode ->
-                // The phone only knows the installed versionCode -- a run
-                // number -- and has no record of the version NAME that shipped
-                // with it. Rendering "v18 → v1.3.19" would imply both sides are
-                // the same kind of number. Label the one we actually have.
-                "build ${installedVersionCode} → v${app.version}"
-            else -> "v${app.version}"
-        }
         Text(
-            text = status,
-            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+            text = when {
+                installedVersionCode == null -> app.summary
+                app.versionCode > installedVersionCode ->
+                    "build $installedVersionCode → v${app.version}"
+                else -> "v${app.version}"
+            },
+            style = MaterialTheme.typography.bodySmall,
             color = Light.ContentSecondary,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
@@ -189,7 +352,7 @@ fun AppRow(
 }
 
 @Composable
-fun ListScreen(
+fun BrowseScreen(
     apps: List<App>,
     sort: Sort,
     query: String,
@@ -202,35 +365,21 @@ fun ListScreen(
     onCategory: (String) -> Unit,
     onSort: (Sort) -> Unit,
     onOpen: (App) -> Unit,
-    onImport: () -> Unit,
 ) {
-    Column(Modifier.fillMaxSize().background(Light.Background)) {
+    Column(Modifier.fillMaxSize()) {
         SearchField(query, onQuery)
         if (categories.size > 1) CategoryRow(categories, category, onCategory)
         SortRow(sort, onSort)
 
         val filtering = query.isNotBlank() || category != "All"
-
         when {
             loading && apps.isEmpty() -> Message("Loading…")
             error != null && apps.isEmpty() -> Message(error)
-            // Distinguish "nothing matched your filter" from "the index is
-            // empty" -- otherwise a typo looks like the store is broken.
             apps.isEmpty() && filtering -> Message("Nothing matches that.")
             apps.isEmpty() -> Message("No apps yet.")
             else -> LazyColumn(Modifier.weight(1f)) {
                 items(apps, key = { it.pkg }) { app ->
                     AppRow(app, installed[app.pkg]) { onOpen(app) }
-                }
-                item {
-                    Text(
-                        "Import from Obtainium",
-                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                        color = Light.ContentSecondary,
-                        modifier = Modifier
-                            .lightClickable(onClick = onImport)
-                            .padding(horizontal = gridUnits(1f), vertical = gridUnits(1.2f)),
-                    )
                 }
             }
         }
@@ -239,43 +388,8 @@ fun ListScreen(
 
 @Composable
 private fun Message(text: String) {
-    Box(Modifier.fillMaxSize().padding(gridUnits(1f)), contentAlignment = Alignment.Center) {
-        Text(text, color = Light.ContentSecondary)
-    }
-}
-
-enum class Tab(val label: String) { BROWSE("Browse"), UPDATES("Updates") }
-
-/**
- * LightBottomBar is LightOS's ActionBar: at most 5 icon items, but at most 3 if
- * any item is text. Two text destinations sits comfortably inside that.
- */
-@Composable
-fun TabBar(current: Tab, updateCount: Int, onSelect: (Tab) -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .height(gridUnits(4f))
-            .padding(horizontal = gridUnits(1f)),
-        horizontalArrangement = Arrangement.spacedBy(gridUnits(2f)),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Tab.entries.forEach { tab ->
-            val selected = tab == current
-            // The count belongs on the label, not in a coloured badge -- there
-            // is no accent colour in the palette to spend on one.
-            val text = if (tab == Tab.UPDATES && updateCount > 0) {
-                "${tab.label} ($updateCount)"
-            } else {
-                tab.label
-            }
-            Text(
-                text = text.uppercase(),
-                style = androidx.compose.material3.MaterialTheme.typography.labelLarge,
-                color = if (selected) Light.Content else Light.ContentSecondary,
-                modifier = Modifier.lightClickable { onSelect(tab) },
-            )
-        }
+    Box(Modifier.fillMaxSize().padding(gridUnits(Grid.INSET)), contentAlignment = Alignment.Center) {
+        Text(text, color = Light.ContentSecondary, style = MaterialTheme.typography.bodySmall)
     }
 }
 
@@ -285,6 +399,7 @@ fun UpdatesScreen(
     upToDate: List<Installed>,
     progressFor: Map<String, Installer.Progress>,
     loading: Boolean,
+    focusMode: Boolean,
     onUpdateAll: () -> Unit,
     onOpen: (App) -> Unit,
 ) {
@@ -296,12 +411,14 @@ fun UpdatesScreen(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        if (loading) "Loading…"
-                        // Distinguish "nothing to update" from "you have none of
-                        // these apps" -- they need different next steps.
-                        else "None of these apps are installed yet.",
+                        when {
+                            loading -> "Loading…"
+                            focusMode ->
+                                "Nothing installed yet. Browse on a desktop and scan the QR."
+                            else -> "None of these apps are installed yet."
+                        },
                         color = Light.ContentSecondary,
-                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodySmall,
                     )
                 }
             }
@@ -309,31 +426,14 @@ fun UpdatesScreen(
         }
 
         if (updates.isNotEmpty()) {
-            item {
-                Text(
-                    "NEEDS UPDATE (${updates.size})",
-                    style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
-                    color = Light.ContentSecondary,
-                    // No padding() overload mixes `horizontal` with `top`;
-                    // they're separate signatures, so chain them.
-                    modifier = Modifier
-                        .padding(horizontal = gridUnits(1f))
-                        .padding(top = gridUnits(1f)),
-                )
-            }
+            item { SectionHeader("NEEDS UPDATE (${updates.size})") }
             item {
                 Text(
                     "UPDATE ALL (${updates.size})",
-                    style = androidx.compose.material3.MaterialTheme.typography.labelLarge,
-                    color = Light.Content,
+                    style = MaterialTheme.typography.labelLarge,
                     modifier = Modifier
-                        .lightClickable(
-                            // Disabled while anything is mid-install: a second
-                            // pass would re-download what's already going.
-                            enabled = progressFor.isEmpty(),
-                            onClick = onUpdateAll,
-                        )
-                        .padding(horizontal = gridUnits(1f), vertical = gridUnits(1f)),
+                        .lightClickable(enabled = progressFor.isEmpty(), onClick = onUpdateAll)
+                        .padding(horizontal = gridUnits(Grid.INSET), vertical = gridUnits(0.8f)),
                 )
             }
             items(updates, key = { it.app.pkg }) { entry ->
@@ -342,17 +442,7 @@ fun UpdatesScreen(
         }
 
         if (upToDate.isNotEmpty()) {
-            item {
-                Text(
-                    "INSTALLED, UP TO DATE (${upToDate.size})",
-                    style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
-                    color = Light.ContentSecondary,
-                    modifier = Modifier.padding(
-                        horizontal = gridUnits(1f),
-                        vertical = gridUnits(1f),
-                    ),
-                )
-            }
+            item { SectionHeader("INSTALLED, UP TO DATE (${upToDate.size})") }
             items(upToDate, key = { it.app.pkg }) { entry ->
                 UpdateRow(entry, progressFor[entry.app.pkg]) { onOpen(entry.app) }
             }
@@ -361,44 +451,51 @@ fun UpdatesScreen(
 }
 
 @Composable
-private fun UpdateRow(
-    entry: Installed,
-    progress: Installer.Progress?,
-    onClick: () -> Unit,
-) {
+private fun SectionHeader(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.titleMedium,
+        color = Light.ContentSecondary,
+        modifier = Modifier
+            .padding(horizontal = gridUnits(Grid.INSET))
+            .padding(top = gridUnits(1f), bottom = gridUnits(0.3f)),
+    )
+}
+
+@Composable
+private fun UpdateRow(entry: Installed, progress: Installer.Progress?, onClick: () -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
             .lightClickable(onClick = onClick)
-            .padding(horizontal = gridUnits(1f), vertical = gridUnits(0.8f))
+            .padding(horizontal = gridUnits(Grid.INSET), vertical = gridUnits(0.8f))
     ) {
-        Text(entry.app.name, style = androidx.compose.material3.MaterialTheme.typography.bodyLarge)
-        val detail = when {
-            progress is Installer.Progress.Downloading && progress.total > 0 ->
-                "Downloading ${progress.bytes * 100 / progress.total}%"
-            progress is Installer.Progress.Downloading -> "Downloading…"
-            progress is Installer.Progress.Verifying -> "Verifying…"
-            progress is Installer.Progress.AwaitingConfirmation -> "Confirm the install…"
-            progress is Installer.Progress.Failed -> progress.reason
-            // Show both sides of the comparison: "1.2.10 → 1.3.19" says why the
-            // row is here far better than the word "Update" does.
-            entry.updatable && entry.isSelf ->
-                // Updating the marketplace closes it. Saying so up front is
-                // better than the app appearing to crash mid-update.
-                "build ${entry.installedVersionCode} → v${entry.app.version} · closes Market"
-            entry.updatable ->
-                "build ${entry.installedVersionCode} → v${entry.app.version}"
-            else -> "v${entry.app.version}"
-        }
+        Text(entry.app.name, style = MaterialTheme.typography.bodyLarge)
         Text(
-            detail,
-            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+            text = when {
+                progress is Installer.Progress.Downloading && progress.total > 0 ->
+                    "Downloading ${progress.bytes * 100 / progress.total}%"
+                progress is Installer.Progress.Downloading -> "Downloading…"
+                progress is Installer.Progress.Verifying -> "Verifying…"
+                progress is Installer.Progress.AwaitingConfirmation -> "Confirm the install…"
+                progress is Installer.Progress.Failed -> progress.reason
+                entry.updatable && entry.isSelf ->
+                    "build ${entry.installedVersionCode} → v${entry.app.version} · closes Market"
+                entry.updatable ->
+                    "build ${entry.installedVersionCode} → v${entry.app.version}"
+                else -> "v${entry.app.version}"
+            },
+            style = MaterialTheme.typography.bodySmall,
             color = Light.ContentSecondary,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
     }
 }
+
+// ---------------------------------------------------------------------------
+// Detail
+// ---------------------------------------------------------------------------
 
 @Composable
 fun DetailScreen(
@@ -408,48 +505,26 @@ fun DetailScreen(
     onInstall: () -> Unit,
     onBack: () -> Unit,
 ) {
+    // The system back gesture must leave the page. Without this the only way out
+    // was a link at the very bottom, which the screenshot strip pushed below the
+    // fold -- the page read as a dead end.
+    BackHandler(onBack = onBack)
+
     Column(
         Modifier
             .fillMaxSize()
             .background(Light.Background)
             .verticalScroll(rememberScrollState())
     ) {
-        // The system back gesture/key must leave the page. Without this the only
-        // way out was the BACK text at the very bottom, which the screenshot
-        // strip pushed below the fold -- the page read as a dead end.
-        BackHandler(onBack = onBack)
+        TopBar(app.name.uppercase(), onBack = onBack)
 
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .height(gridUnits(3f))
-                .lightClickable(onClick = onBack)
-                .padding(horizontal = gridUnits(1f)),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                "< BACK",
-                style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
-                color = Light.ContentSecondary,
-            )
-        }
+        Column(Modifier.padding(horizontal = gridUnits(Grid.INSET))) {
+            Text(app.summary, style = MaterialTheme.typography.bodyMedium)
 
-        Column(Modifier.padding(horizontal = gridUnits(1f))) {
-            // The bar's title is set in `fine` and reads as chrome. The product
-            // itself needs a real heading, or the page opens with a description
-            // and no indication of what it describes.
-            Text(
-                app.name,
-                style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
-            )
-            Spacer(Modifier.height(gridUnits(0.5f)))
-
-            Text(app.summary, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
-
-            Spacer(Modifier.height(gridUnits(1f)))
+            Spacer(Modifier.height(gridUnits(0.8f)))
             Text(
                 "v${app.version}  ·  ${app.size / 1_000_000}MB  ·  ${app.downloads} downloads",
-                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodySmall,
                 color = Light.ContentSecondary,
             )
 
@@ -462,8 +537,7 @@ fun DetailScreen(
 
             val label = when {
                 progress is Installer.Progress.Downloading ->
-                    if (progress.total > 0)
-                        "Downloading ${progress.bytes * 100 / progress.total}%"
+                    if (progress.total > 0) "Downloading ${progress.bytes * 100 / progress.total}%"
                     else "Downloading…"
                 progress is Installer.Progress.Verifying -> "Verifying…"
                 progress is Installer.Progress.AwaitingConfirmation -> "Confirm the install…"
@@ -475,25 +549,39 @@ fun DetailScreen(
             val enabled = progress == null || progress is Installer.Progress.Failed
             Text(
                 text = label.uppercase(),
-                style = androidx.compose.material3.MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.labelLarge,
                 color = if (enabled) Light.Content else Light.ContentSecondary,
                 modifier = Modifier.lightClickable(enabled = enabled, onClick = onInstall),
             )
 
             if (progress is Installer.Progress.Downloading && progress.total > 0) {
-                Spacer(Modifier.height(gridUnits(0.5f)))
-                LinearProgressIndicator(
-                    progress = { progress.bytes.toFloat() / progress.total },
-                    modifier = Modifier.fillMaxWidth(),
-                    color = Light.Content,
-                    trackColor = Light.ContentSecondary,
-                )
+                Spacer(Modifier.height(gridUnits(0.4f)))
+                // Drawn, not Material's LinearProgressIndicator: that component
+                // animates and carries a tonal track, neither of which exists in
+                // LightOS.
+                Canvas(Modifier.fillMaxWidth(0.8f).height(gridUnits(0.2f))) {
+                    drawLine(
+                        color = Light.ContentSecondary,
+                        start = Offset(0f, size.height / 2),
+                        end = Offset(size.width, size.height / 2),
+                        strokeWidth = size.height,
+                    )
+                    drawLine(
+                        color = Light.Content,
+                        start = Offset(0f, size.height / 2),
+                        end = Offset(
+                            size.width * progress.bytes.toFloat() / progress.total,
+                            size.height / 2,
+                        ),
+                        strokeWidth = size.height,
+                    )
+                }
             }
             if (progress is Installer.Progress.Failed) {
-                Spacer(Modifier.height(gridUnits(0.5f)))
+                Spacer(Modifier.height(gridUnits(0.4f)))
                 Text(
                     progress.reason,
-                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodySmall,
                     color = Light.ContentSecondary,
                 )
             }
@@ -502,20 +590,13 @@ fun DetailScreen(
                 Spacer(Modifier.height(gridUnits(1.5f)))
                 Text(
                     "What's new",
-                    style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleMedium,
                     color = Light.ContentSecondary,
                 )
                 Spacer(Modifier.height(gridUnits(0.4f)))
-                Text(app.notes, style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                Text(app.notes, style = MaterialTheme.typography.bodySmall)
             }
 
-            Spacer(Modifier.height(gridUnits(2f)))
-            Text(
-                "BACK",
-                style = androidx.compose.material3.MaterialTheme.typography.labelLarge,
-                color = Light.ContentSecondary,
-                modifier = Modifier.lightClickable(onClick = onBack),
-            )
             Spacer(Modifier.height(gridUnits(2f)))
         }
     }

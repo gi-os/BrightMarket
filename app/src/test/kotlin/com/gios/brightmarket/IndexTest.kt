@@ -1,5 +1,6 @@
 package com.gios.brightmarket
 
+import com.gios.brightmarket.data.Focus
 import com.gios.brightmarket.data.Index
 import com.gios.brightmarket.data.Obtainium
 import com.gios.brightmarket.data.Sort
@@ -225,5 +226,42 @@ class IndexTest {
         val apps = Index.parse(sample)
         val (updates, _) = Index.partitionInstalled(apps, mapOf(self to 1L), self)
         assertTrue(updates.first().isSelf)
+    }
+
+    // ---- Focus mode link parsing -------------------------------------------
+    // A QR scanner points at the world and decodes all sorts of things, so the
+    // parser has to reject confidently rather than throw.
+
+    @Test fun `app links parse to a package`() {
+        assertEquals(
+            Focus.Link.OpenApp("com.gios.lighttip"),
+            Focus.parseLink("brightmarket://app/com.gios.lighttip"),
+        )
+    }
+
+    @Test fun `focus on and off links parse`() {
+        assertEquals(Focus.Link.SetFocus(true), Focus.parseLink("brightmarket://focus/on"))
+        assertEquals(Focus.Link.SetFocus(false), Focus.parseLink("brightmarket://focus/off"))
+    }
+
+    @Test fun `scheme is required, so a stray QR is ignored`() {
+        assertEquals(null, Focus.parseLink("https://example.com/app/com.gios.lighttip"))
+        assertEquals(null, Focus.parseLink("just some text on a cereal box"))
+        assertEquals(null, Focus.parseLink(""))
+    }
+
+    @Test fun `malformed brightmarket links are ignored, not guessed at`() {
+        assertEquals(null, Focus.parseLink("brightmarket://app/"))
+        // No dot: not a package name.
+        assertEquals(null, Focus.parseLink("brightmarket://app/nonsense"))
+        assertEquals(null, Focus.parseLink("brightmarket://focus/sideways"))
+        assertEquals(null, Focus.parseLink("brightmarket://nothing/here"))
+    }
+
+    @Test fun `parsing tolerates case and surrounding whitespace`() {
+        assertEquals(
+            Focus.Link.SetFocus(true),
+            Focus.parseLink("  BRIGHTMARKET://focus/ON  "),
+        )
     }
 }
