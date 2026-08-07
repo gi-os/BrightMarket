@@ -33,7 +33,7 @@ android {
         targetSdk = 35
         // CI overwrites both from the workflow run number; see .github/workflows/build.yml
         versionCode = 1
-        versionName = "1.8.0"
+        versionName = "1.9.0"
 
         ndk { abiFilters += "arm64-v8a" }
 
@@ -43,7 +43,7 @@ android {
         buildConfigField(
             "String",
             "INDEX_URL",
-            "\"https://gi-os.github.io/brightmarket-index/index-v1.json\""
+            "\"https://brightmarket.gzl.dev/index-v1.json\""
         )
     }
 

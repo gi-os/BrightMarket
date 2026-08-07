@@ -4,6 +4,18 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.9
+
+**The catalogue has its own address: `brightmarket.gzl.dev`.** The old
+`gi-os.github.io/brightmarket-index` links still work and always will — GitHub
+redirects them — but the app now fetches the index from the short domain
+directly rather than through a redirect, and the "turn Focus mode off" screen
+tells you the address you'd actually type.
+
+The install link is `brightmarket.gzl.dev/apk`, which always points at the
+current signed release. That is what the setup QR encodes now, so a code printed
+in a README doesn't go stale the next time this ships.
+
 ## v1.8
 
 **Refresh tells you what it found.** A refresh that turns up nothing new

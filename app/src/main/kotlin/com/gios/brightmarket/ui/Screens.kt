@@ -269,7 +269,7 @@ fun SettingsScreen(
             )
             Spacer(Modifier.height(gridUnits(0.2f)))
             Text(
-                "gi-os.github.io/brightmarket-index/browse.html",
+                "brightmarket.gzl.dev/browse.html",
                 style = MaterialTheme.typography.bodySmall,
             )
             Spacer(Modifier.height(gridUnits(0.6f)))
