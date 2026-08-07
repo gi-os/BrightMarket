@@ -69,11 +69,6 @@ private class QrAnalyzer(private val onResult: (String) -> Unit) : ImageAnalysis
 @Composable
 fun ScanScreen(onScanned: (String) -> Unit) {
     val context = LocalContext.current
-    // A link you can paste, above the viewfinder. Scanning assumes the thing
-    // you want is on another screen you can point a camera at; plenty of the
-    // time it arrived in a message on this phone, and there was no way to use
-    // it. Same handler either way -- this only changes how the text gets here.
-    var typed by remember { mutableStateOf("") }
     var granted by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
@@ -90,46 +85,14 @@ fun ScanScreen(onScanned: (String) -> Unit) {
     LaunchedEffect(Unit) { if (!granted) ask.launch(Manifest.permission.CAMERA) }
 
     Column(Modifier.fillMaxSize()) {
-        // Above the permission gate on purpose. Pasting a link needs no camera,
-        // and below the gate it was unreachable for anyone who said no to one --
-        // which left declining the camera meaning "you cannot add apps", a
-        // consequence nobody agreed to.
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = gridUnits(Grid.INSET))
-        ) {
-            LightTextField(
-                value = typed,
-                onValueChange = { typed = it },
-                placeholder = "Paste a link",
-            )
-            Spacer(Modifier.height(gridUnits(0.4f)))
-            Text(
-                "ADD",
-                style = MaterialTheme.typography.labelLarge,
-                color = if (typed.isBlank()) Light.ContentSecondary else Light.Content,
-                modifier = Modifier.lightClickable(enabled = typed.isNotBlank()) {
-                    onScanned(typed.trim())
-                },
-            )
-            Spacer(Modifier.height(gridUnits(0.3f)))
-            Text(
-                "A GitHub repo, a brightmarket.gzl.dev link, or a direct .apk URL.",
-                style = MaterialTheme.typography.bodySmall,
-                color = Light.ContentSecondary,
-            )
-            Spacer(Modifier.height(gridUnits(0.8f)))
-        }
-
         if (!granted) {
             Box(
-                Modifier.fillMaxWidth().weight(1f).padding(gridUnits(Grid.INSET)),
+                Modifier.fillMaxSize().padding(gridUnits(Grid.INSET)),
                 contentAlignment = Alignment.Center,
             ) {
                 Column {
                     Text(
-                        "Scanning needs the camera. Pasting a link doesn't.",
+                        "Scanning needs the camera.",
                         style = MaterialTheme.typography.bodyLarge,
                     )
                     Spacer(Modifier.height(gridUnits(0.5f)))

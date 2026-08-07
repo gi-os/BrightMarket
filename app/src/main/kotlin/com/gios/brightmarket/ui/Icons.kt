@@ -135,3 +135,18 @@ fun IconBack(tint: Color, units: Float = Grid.ICON) {
             Offset(size.width * 0.62f, size.height * 0.84f), w, StrokeCap.Round)
     }
 }
+
+@Composable
+fun IconPlus(tint: Color, units: Float = Grid.ICON) {
+    Canvas(Modifier.size(gridUnits(units))) {
+        val w = strokePx()
+        val i = size.minDimension * 0.16f
+        val far = size.minDimension - i
+        val mid = size.minDimension / 2
+        // Two strokes and nothing else. A plus in a circle reads as a button in
+        // a design language that has no buttons, and the SDK's own icons are
+        // bare strokes.
+        drawLine(tint, Offset(i, mid), Offset(far, mid), w, StrokeCap.Round)
+        drawLine(tint, Offset(mid, i), Offset(mid, far), w, StrokeCap.Round)
+    }
+}

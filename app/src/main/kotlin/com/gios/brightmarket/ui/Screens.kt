@@ -13,6 +13,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -38,7 +42,9 @@ import com.gios.brightmarket.install.Installer
 fun TopBar(
     title: String,
     onBack: (() -> Unit)? = null,
-    onScan: (() -> Unit)? = null,
+    /** A plus, not a viewfinder: adding an app is the action, and scanning is
+     *  one of two ways to do it. */
+    onAdd: (() -> Unit)? = null,
     onRefresh: (() -> Unit)? = null,
     refreshing: Boolean = false,
 ) {
@@ -57,7 +63,7 @@ fun TopBar(
             ) { IconBack(Light.Content) }
         }
         Text(title, style = MaterialTheme.typography.labelMedium)
-        if (onScan != null || onRefresh != null) {
+        if (onAdd != null || onRefresh != null) {
             Spacer(Modifier.weight(1f))
             if (onRefresh != null) {
                 if (refreshing) {
@@ -75,8 +81,8 @@ fun TopBar(
                 }
                 Spacer(Modifier.width(gridUnits(1f)))
             }
-            if (onScan != null) {
-                Box(Modifier.lightClickable(onClick = onScan)) { IconScan(Light.Content) }
+            if (onAdd != null) {
+                Box(Modifier.lightClickable(onClick = onAdd)) { IconPlus(Light.Content) }
             }
         }
     }
@@ -164,6 +170,73 @@ fun SearchField(query: String, onQuery: (String) -> Unit) {
             .padding(horizontal = gridUnits(Grid.INSET), vertical = gridUnits(0.4f))
     ) {
         LightTextField(query, onQuery, "Search")
+    }
+}
+
+/**
+ * The plus menu.
+ *
+ * Tapping plus used to open a live viewfinder immediately: the camera came up,
+ * with no statement of what it was for and no other option, for a task that
+ * often needs no camera at all. This is the page that should have been there —
+ * it says what adding an app means, and offers the two ways to do it.
+ *
+ * The field is first because it's the one that works with a link somebody sent
+ * you, which is most of them. Scanning is one tap further along, and still the
+ * faster route when the code is in front of you.
+ */
+@Composable
+fun AddScreen(onSubmit: (String) -> Unit, onScan: () -> Unit) {
+    var typed by remember { mutableStateOf("") }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Light.Background)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = gridUnits(Grid.INSET)),
+    ) {
+        Spacer(Modifier.height(gridUnits(1f)))
+        Text("PASTE A LINK", style = MaterialTheme.typography.titleMedium, color = Light.ContentSecondary)
+        Spacer(Modifier.height(gridUnits(0.4f)))
+        LightTextField(
+            value = typed,
+            onValueChange = { typed = it },
+            placeholder = "https://…",
+        )
+        Spacer(Modifier.height(gridUnits(0.6f)))
+        Text(
+            "ADD",
+            style = MaterialTheme.typography.labelLarge,
+            color = if (typed.isBlank()) Light.ContentSecondary else Light.Content,
+            modifier = Modifier
+                .lightClickable(enabled = typed.isNotBlank()) { onSubmit(typed.trim()) }
+                .padding(vertical = gridUnits(0.4f), horizontal = gridUnits(0.1f)),
+        )
+        Spacer(Modifier.height(gridUnits(0.4f)))
+        Text(
+            "A GitHub repo, a brightmarket.gzl.dev link, or a direct .apk URL.",
+            style = MaterialTheme.typography.bodySmall,
+            color = Light.ContentSecondary,
+        )
+
+        Spacer(Modifier.height(gridUnits(2f)))
+        Text("SCAN A CODE", style = MaterialTheme.typography.titleMedium, color = Light.ContentSecondary)
+        Spacer(Modifier.height(gridUnits(0.4f)))
+        Text(
+            "From the desktop catalogue, or any QR with a repo link in it.",
+            style = MaterialTheme.typography.bodySmall,
+            color = Light.ContentSecondary,
+        )
+        Spacer(Modifier.height(gridUnits(0.6f)))
+        Text(
+            "OPEN THE CAMERA",
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier
+                .lightClickable(onClick = onScan)
+                .padding(vertical = gridUnits(0.4f), horizontal = gridUnits(0.1f)),
+        )
+        Spacer(Modifier.height(gridUnits(2f)))
     }
 }
 

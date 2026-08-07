@@ -77,6 +77,8 @@ class MainActivity : ComponentActivity() {
     private var pendingPkg: String? = null
 
     private var scanning by mutableStateOf(false)
+    /** The plus menu. Distinct from [scanning]: the camera is one route off it. */
+    private var adding by mutableStateOf(false)
     private var trackedRows by mutableStateOf<List<TrackedRow>>(emptyList())
     private var followed by mutableStateOf<Set<String>>(emptySet())
 
@@ -198,6 +200,20 @@ class MainActivity : ComponentActivity() {
                     return@BrightMarketTheme
                 }
 
+                if (adding) {
+                    Column(Modifier.fillMaxSize().background(Light.Background)) {
+                        TopBar("ADD AN APP", onBack = { adding = false })
+                        AddScreen(
+                            onSubmit = { text ->
+                                adding = false
+                                onScanned(text)
+                            },
+                            onScan = { scanning = true },
+                        )
+                    }
+                    return@BrightMarketTheme
+                }
+
                 if (scanning) {
                     // Full screen: a viewfinder squeezed under the chrome is
                     // harder to aim, and there is nothing else to do here.
@@ -208,6 +224,7 @@ class MainActivity : ComponentActivity() {
                             TopBar("SCAN", onBack = { scanning = false })
                             ScanScreen { text ->
                                 scanning = false
+                                adding = false
                                 onScanned(text)
                             }
                         }
@@ -247,7 +264,7 @@ class MainActivity : ComponentActivity() {
                 Column(Modifier.fillMaxSize().background(Light.Background)) {
                     TopBar(
                         "BRIGHTMARKET",
-                        onScan = { scanning = true },
+                        onAdd = { adding = true },
                         onRefresh = {
                             if (!loading) {
                                 manualRefresh = true
