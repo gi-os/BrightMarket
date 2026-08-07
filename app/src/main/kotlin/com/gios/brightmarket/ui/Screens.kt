@@ -314,10 +314,11 @@ fun UpdatesScreen(
                     "NEEDS UPDATE (${updates.size})",
                     style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
                     color = Light.ContentSecondary,
-                    modifier = Modifier.padding(
-                        horizontal = gridUnits(1f),
-                        top = gridUnits(1f),
-                    ),
+                    // No padding() overload mixes `horizontal` with `top`;
+                    // they're separate signatures, so chain them.
+                    modifier = Modifier
+                        .padding(horizontal = gridUnits(1f))
+                        .padding(top = gridUnits(1f)),
                 )
             }
             item {
