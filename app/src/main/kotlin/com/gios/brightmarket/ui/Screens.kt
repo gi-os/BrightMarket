@@ -96,8 +96,8 @@ fun BottomBar(items: List<String>, selected: Int, onSelect: (Int) -> Unit) {
             ) {
                 val tint = if (i == selected) Light.Content else Light.ContentSecondary
                 when (label) {
-                    "Browse" -> IconBrowse(tint)
-                    "Updates" -> IconUpdates(tint)
+                    "Browse" -> IconApps(tint)
+                    "Updates" -> IconDownload(tint)
                     else -> IconSettings(tint)
                 }
             }

@@ -27,17 +27,20 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 private fun DrawScope.strokePx() = size.minDimension * 0.085f
 
 @Composable
-fun IconBrowse(tint: Color, units: Float = Grid.ICON) {
+fun IconApps(tint: Color, units: Float = Grid.ICON) {
     Canvas(Modifier.size(gridUnits(units))) {
         val w = strokePx()
-        val cell = size.minDimension / 2.6f
+        val cell = size.minDimension / 2.5f
         val gap = size.minDimension - cell * 2
-        // Four cells: a catalogue, not a list.
+        // Four rounded tiles: app icons on a home screen, which is what this
+        // tab is a list of. A plain square grid reads as a table or a menu.
+        val r = androidx.compose.ui.geometry.CornerRadius(cell * 0.28f, cell * 0.28f)
         listOf(0f to 0f, 1f to 0f, 0f to 1f, 1f to 1f).forEach { (cx, cy) ->
-            drawRect(
+            drawRoundRect(
                 color = tint,
                 topLeft = Offset(cx * (cell + gap), cy * (cell + gap)),
                 size = Size(cell, cell),
+                cornerRadius = r,
                 style = Stroke(width = w),
             )
         }
@@ -45,15 +48,20 @@ fun IconBrowse(tint: Color, units: Float = Grid.ICON) {
 }
 
 @Composable
-fun IconUpdates(tint: Color, units: Float = Grid.ICON) {
+fun IconDownload(tint: Color, units: Float = Grid.ICON) {
     Canvas(Modifier.size(gridUnits(units))) {
         val w = strokePx()
         val cx = size.width / 2
-        // Arrow down into a tray: an update arriving, not a generic download.
-        drawLine(tint, Offset(cx, size.height * 0.08f), Offset(cx, size.height * 0.60f), w, StrokeCap.Round)
-        drawLine(tint, Offset(size.width * 0.28f, size.height * 0.40f), Offset(cx, size.height * 0.62f), w, StrokeCap.Round)
-        drawLine(tint, Offset(size.width * 0.72f, size.height * 0.40f), Offset(cx, size.height * 0.62f), w, StrokeCap.Round)
-        drawLine(tint, Offset(size.width * 0.12f, size.height * 0.86f), Offset(size.width * 0.88f, size.height * 0.86f), w, StrokeCap.Round)
+        // Arrow into a tray. The shaft stops short of the head and the tray
+        // sits clear below it -- at bar size a continuous line through both
+        // reads as a single stroke rather than an arrow landing in something.
+        drawLine(tint, Offset(cx, size.height * 0.10f), Offset(cx, size.height * 0.56f), w, StrokeCap.Round)
+        drawLine(tint, Offset(size.width * 0.30f, size.height * 0.38f), Offset(cx, size.height * 0.60f), w, StrokeCap.Round)
+        drawLine(tint, Offset(size.width * 0.70f, size.height * 0.38f), Offset(cx, size.height * 0.60f), w, StrokeCap.Round)
+        // Tray: two uprights and a floor, so it is a container and not a rule.
+        drawLine(tint, Offset(size.width * 0.14f, size.height * 0.72f), Offset(size.width * 0.14f, size.height * 0.88f), w, StrokeCap.Round)
+        drawLine(tint, Offset(size.width * 0.86f, size.height * 0.72f), Offset(size.width * 0.86f, size.height * 0.88f), w, StrokeCap.Round)
+        drawLine(tint, Offset(size.width * 0.14f, size.height * 0.88f), Offset(size.width * 0.86f, size.height * 0.88f), w, StrokeCap.Round)
     }
 }
 
