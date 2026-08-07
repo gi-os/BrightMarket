@@ -65,17 +65,40 @@ class MainActivity : ComponentActivity() {
                 toast("Couldn't read that file.")
                 return@launch
             }
-            val result = runCatching {
-                Obtainium.match(Obtainium.parse(text), apps)
-            }.getOrElse {
+            val entries = runCatching { Obtainium.parse(text) }.getOrElse {
                 toast("That doesn't look like an Obtainium export.")
                 return@launch
             }
-            val msg = buildString {
-                append("${result.matched.size} of ${result.matched.size + result.unmatched.size} already in BrightMarket")
-                if (result.unmatched.isNotEmpty()) append("; ${result.unmatched.size} not indexed yet")
+            if (entries.isEmpty()) {
+                toast("No apps found in that file.")
+                return@launch
             }
-            toast(msg)
+            val result = Obtainium.match(entries, apps)
+
+            // Actually keep the ones BrightMarket doesn't index. Reporting a
+            // count and dropping them made this a migration that only looked
+            // finished: someone replacing Obtainium would have quietly stopped
+            // getting updates for everything it was watching.
+            val toTrack = Obtainium.trackable(result.unmatched)
+            val existing = Tracked.all(this@MainActivity)
+            val merged = (existing + toTrack).distinctBy { it.repo.lowercase() }
+            val added = merged.size - existing.size
+            if (added > 0) Tracked.save(this@MainActivity, merged)
+
+            // An entry with no GitHub repo has no update source, so it cannot be
+            // tracked at all. Say so rather than letting it vanish into the gap
+            // between the two numbers.
+            val unusable = result.unmatched.size - toTrack.size
+
+            toast(
+                buildString {
+                    append("Imported ${entries.size}: ")
+                    append("${result.matched.size} in BrightMarket")
+                    if (added > 0) append(", $added now tracked")
+                    if (unusable > 0) append(", $unusable with no GitHub repo skipped")
+                }
+            )
+            refreshTracked()
         }
     }
 

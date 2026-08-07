@@ -4,6 +4,20 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.3
+
+**Obtainium import now actually keeps your apps.** It read the export, counted
+what matched, and dropped the rest — a migration that only looked finished.
+Everything is kept now: apps BrightMarket indexes become normal entries, and
+everything else is tracked for updates under **NOT IN BRIGHTMARKET**.
+
+Entries with no GitHub repo behind them are reported rather than silently lost.
+There is nothing to check for updates against, so they can't be tracked, and
+saying so is better than a number that doesn't add up.
+
+Re-importing the same export doesn't duplicate anything — repos are matched
+case-insensitively, the way GitHub treats them.
+
 ## v1.2
 
 **Refresh.** A refresh control in the top bar, which refetches the catalogue

@@ -3,6 +3,7 @@ package com.gios.brightmarket
 import com.gios.brightmarket.data.Focus
 import com.gios.brightmarket.data.Index
 import com.gios.brightmarket.data.Obtainium
+import com.gios.brightmarket.data.Tracked
 import com.gios.brightmarket.data.Sort
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -264,6 +265,34 @@ class IndexTest {
             Focus.parseLink("  BRIGHTMARKET://focus/ON  "),
         )
     }
+
+    @Test fun `import keeps the apps BrightMarket does not index`() {
+        val export = """
+        {"apps":[{"app":{"id":"com.gios.lighttip","url":"https://github.com/gi-os/LightTip"}},
+                 {"app":{"id":"com.termux","url":"https://github.com/termux/termux-app"}},
+                 {"app":{"id":"org.fdroid","url":"https://f-droid.org/repo"}}]}
+        """.trimIndent()
+        val entries = Obtainium.parse(export)
+        val result = Obtainium.match(entries, Index.parse(sample))
+
+        // The indexed one matched on applicationId despite a pre-rename URL.
+        assertEquals(listOf("BrightTip"), result.matched.map { it.name })
+
+        // The GitHub one becomes trackable; the f-droid one has no repo to
+        // watch and must be reported, not silently dropped.
+        val trackable = Obtainium.trackable(result.unmatched)
+        assertEquals(listOf("termux/termux-app"), trackable.map { it.repo })
+        assertEquals(1, result.unmatched.size - trackable.size)
+    }
+
+    @Test fun `importing twice does not duplicate a tracked repo`() {
+        // GitHub treats owner/name case-insensitively, so the same repo in two
+        // exports must not become two rows that update each other in a loop.
+        val a = Tracked.Entry(repo = "termux/termux-app")
+        val b = Tracked.Entry(repo = "Termux/Termux-App")
+        assertEquals(1, listOf(a, b).distinctBy { it.repo.lowercase() }.size)
+    }
+
 }
 
 class MarkdownTest {
