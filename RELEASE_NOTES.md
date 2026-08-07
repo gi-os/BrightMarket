@@ -4,6 +4,27 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.10
+
+**You have to reinstall this one.** Sorry. Every build up to v1.9 was signed with a
+key that lived in this repository with its password written three lines under it,
+which meant anybody could produce an APK that Android would happily accept as an
+update to BrightMarket. That was fine when the only person installing it was me. It
+is not fine for an app whose entire job is installing software.
+
+The key is now a CI secret and the replacement has never been in the tree. Android
+identifies an app by package name *and* signing certificate and refuses to install
+across a change of either, so this one time the update has to be an uninstall and a
+fresh install. Your installed apps are not touched — only BrightMarket's own
+settings, which is Focus mode and your tracked repos.
+
+Building locally still works and still gives you an installable APK; it is signed
+with your debug key and won't install over a release, which is the correct outcome
+rather than an inconvenience.
+
+Also: a licence file, at last (MIT, same as the rest), and the store's own listing
+finally has screenshots.
+
 ## v1.9
 
 **The catalogue has its own address: `brightmarket.gzl.dev`.** The old

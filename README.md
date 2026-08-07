@@ -1,61 +1,114 @@
 # BrightMarket
 
-An app marketplace for the Light Phone III. Browse sideloaded apps, install them,
-and keep them updated — all free, all from GitHub releases.
-
-## Install
+An app store for the Light Phone III. It finds sideloaded apps, installs them, and
+tells you when they have updates. Everything in it is free and open source, and
+every download comes from a GitHub release.
 
 <p align="center">
   <img src="https://brightmarket.gzl.dev/assets/qr/install.png" alt="Scan to download the BrightMarket APK" width="180" />
 </p>
 
 Scan that with the phone, or open **[brightmarket.gzl.dev/apk](https://brightmarket.gzl.dev/apk)**,
-which always redirects to the current signed release. Every other Bright app
-installs from inside BrightMarket once it's on the phone — this is the only one
-that has to come from the web, for the obvious reason.
+which always redirects to the current signed release. Every other app installs from
+inside BrightMarket once it's on the phone — this is the only one that has to come
+from the web, for the obvious reason.
 
-Browse the full catalogue at **[brightmarket.gzl.dev/browse.html](https://brightmarket.gzl.dev/browse.html)**.
+Browse the catalogue at **[brightmarket.gzl.dev](https://brightmarket.gzl.dev)**.
 
-**Package `com.gios.brightmarket`. minSdk 30** (the rest of the portfolio targets
-29; wireless debugging, which the future silent-install path needs, is Android 11+).
+<p align="center">
+  <img src="docs/screenshots/01-browse.png" width="30%" />
+  <img src="docs/screenshots/02-installed.png" width="30%" />
+  <img src="docs/screenshots/03-settings.png" width="30%" />
+</p>
 
-## How it works
+`com.gios.brightmarket`, minSdk 30. The rest of the portfolio targets 29; wireless
+debugging, which the planned silent-install path needs, is Android 11 and up.
 
-There is no server and no database. [`gi-os/brightmarket-index`](https://github.com/gi-os/brightmarket-index)
-holds a curated `apps.yml`; an hourly GitHub Action turns it into a single
-`index-v1.json` (about 1KB gzipped) served from GitHub Pages. The app fetches that
-one file.
+## What it's for
 
-Sorting needs no analytics: **Popular** sums GitHub's own `download_count` across
-every release, **Updated** uses the release timestamp, **New** uses the date the
-index first saw the app. BrightMarket never sees a user.
+Sideloading on the Light Phone works, but keeping fifteen sideloaded apps current
+means checking fifteen release pages. Obtainium solves that and solves it well — it
+is just built for a normal Android. The wheel does nothing in it, and it has no idea
+which of your APKs is a Light Phone app, because it only knows the GitHub links you
+pasted into it yourself.
 
-## Installing
-
-v1 uses `PackageInstaller` with the system's own confirmation dialog. It works on
-any device with no setup. Every download is checked against the `sha256` in the
-index before it is handed to the installer — the index is a static file on GitHub
-Pages, and that hash is the only thing making it trustworthy.
-
-A silent path is planned (an embedded ADB client pairing the phone to its own
-`adbd` over loopback, which gets shell uid and therefore `INSTALL_PACKAGES`).
-The dialog path stays as a real fallback regardless: an ADB maintainer has
-proposed binding `adbd` to `wlan0` only, which would end that technique outright.
+BrightMarket does the same update tracking, fits this phone, and adds a catalogue on
+top so there is somewhere to find apps in the first place.
 
 ## Coming from Obtainium
 
-**Import from Obtainium** at the bottom of the list takes an Obtainium export and
-matches it against the index. It reads both the current `{"apps":[{"app":{…}}]}`
-shape and the older bare-array exports, and it matches on **applicationId first**,
-falling back to repo URL — so an export made before the Light→Bright rename still
-resolves, because applicationIds never changed. Anything it can't place is
-reported by count rather than silently dropped.
+**Import from Obtainium**, in Settings, takes an Obtainium export file and picks up
+everything in it — including apps that aren't in the catalogue, which are kept and
+marked `UNLISTED` rather than dropped.
+
+It reads both the current `{"apps":[{"app":{…}}]}` shape and the older bare-array
+exports. Matching is on **applicationId first**, falling back to the repo URL, so an
+export made before the Light→Bright rename still resolves: the repositories were
+renamed but the applicationIds never were. Anything it genuinely can't place is
+reported as a count, not silently discarded.
+
+You don't have to choose. Both can track the same repos.
+
+## Focus mode
+
+An app store on a Light Phone is still an infinite scrolling feed, which is a little
+self-defeating. So browsing is optional, and the app asks on first launch.
+
+With Focus mode on, the phone shows what you have installed and what needs updating,
+and nothing else. New apps come from scanning a QR code off the desktop site. You can
+still update everything without a laptop; you just can't browse.
+
+Turning it back on means scanning a code at
+[brightmarket.gzl.dev](https://brightmarket.gzl.dev). That is not real security — it
+is a link, and you could type it — but it does mean the thing you'd have to go and
+find is on a different screen in a different room.
 
 ## Adding your app
 
-Use the [portal](https://gi-os.github.io/brightmarket-index/submit.html) (GitHub
-sign-in, `read:user` only, lists just the repos you own) or open a submission
-issue. Checks and the trust model are documented in the index repo.
+Use the [submission portal](https://brightmarket.gzl.dev/submit.html): sign in with
+GitHub, pick a repo that publishes APK releases. The OAuth scope is `read:user`, it
+reads only your public repositories, and it cannot write anything anywhere. Opening
+an issue works too.
+
+Submission checks are structural — that the release exists, has one APK asset, and
+declares a versionCode that moves forwards. Nobody reads your code. Being listed
+means the release is put together properly and nothing more, and the site says so.
+
+## How it works
+
+There is no server and no database.
+[`gi-os/brightmarket-index`](https://github.com/gi-os/brightmarket-index) holds a
+curated `apps.yml`; a GitHub Action turns it into a single `index-v1.json` served
+from GitHub Pages. The app fetches that one file.
+
+The builder downloads each APK and reads the real `versionCode` and `applicationId`
+out of it rather than trusting the tag. That matters more than it sounds: for plain
+semver the trailing number goes *backwards* on a minor bump — 1.2.2 to 1.3.0 — which
+would tell every user they were permanently up to date.
+
+Sorting needs no analytics. **Popular** sums GitHub's own `download_count`,
+**Updated** uses the release timestamp, **New** uses the date the index first saw the
+app. BrightMarket has no backend to report to and never sees a user.
+
+## Installing apps, and what is actually checked
+
+Installs go through `PackageInstaller` with the system's own confirmation dialog, so
+it works on any device with no setup.
+
+Every download is checked against the `sha256` in the index before it reaches the
+installer. That hash is generated by the index builder from the actual release asset,
+and it is the thing that makes a download trustworthy — not the source it came from.
+Repos you add yourself by QR have no hash, because nothing generated one, and they
+are marked `UNLISTED` so the difference is visible rather than assumed.
+
+The signing certificate of every listed app is pinned the first time it is indexed,
+and the build fails if it changes, so an app cannot quietly change hands. None of
+this is a code review.
+
+A silent install path is planned — an embedded ADB client pairing the phone to its
+own `adbd` over loopback, which gets shell uid and therefore `INSTALL_PACKAGES`. The
+dialog stays regardless: an ADB maintainer has proposed binding `adbd` to `wlan0`
+only, which would end that technique outright.
 
 ## Building
 
@@ -63,8 +116,27 @@ issue. Checks and the trust model are documented in the index repo.
 ./gradlew :app:assembleRelease
 ```
 
-The keystore is committed at `keystore/brightmarket.jks` so every build carries the
-same certificate and upgrades install over the top. CI pins that certificate's
-SHA-256 in `signing-fingerprint.txt` and fails if it drifts, because a changed cert
-surfaces to users only as an opaque `Failure: Invalid`. Exactly one APK is attached
-per release.
+A local build produces an installable APK signed with your debug key. It will not
+install over a release build, and that is deliberate — a build that isn't the real
+thing should say so at install time rather than pretend.
+
+The release key lives only in CI, as the `KEYSTORE_B64` and `KEYSTORE_PASSWORD`
+secrets. Its certificate SHA-256 is pinned in `signing-fingerprint.txt` and CI fails
+if the built APK doesn't match, because a changed certificate reaches users as an
+opaque `Failure: Invalid` and nothing else. Exactly one APK is attached per release.
+
+> **If you installed BrightMarket before v1.10:** that build was signed with a key
+> committed to this repository, password and all, which meant anyone could produce an
+> APK that Android would accept as an update to it. The key is now a CI secret and
+> the new one has never been in the tree. Android won't install across a certificate
+> change, so this once you have to uninstall and reinstall. Nothing is lost except
+> BrightMarket's own settings — the apps you installed with it are untouched.
+
+## Reporting a bug
+
+Shake the phone. It files an issue with a screenshot and the recent log, so you don't
+have to describe what you saw.
+
+## Licence
+
+MIT. See [LICENSE](LICENSE).

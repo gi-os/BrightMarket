@@ -33,7 +33,7 @@ android {
         targetSdk = 35
         // CI overwrites both from the workflow run number; see .github/workflows/build.yml
         versionCode = 1
-        versionName = "1.9.0"
+        versionName = "1.10.0"
 
         ndk { abiFilters += "arm64-v8a" }
 
@@ -47,12 +47,28 @@ android {
         )
     }
 
+    // The release key used to live in this repository with its password written
+    // three lines below it, which meant anyone could produce an APK that Android
+    // would accept as an update to this one. It is now a CI secret: the workflow
+    // decodes it to keystore/brightmarket.jks, which is gitignored.
+    //
+    // A build without the secret still works and still produces an installable
+    // APK -- it is just signed with the local debug key and will not update over
+    // a release. That is the right failure: an unsigned or differently-signed
+    // build that announces itself is better than one that silently isn't the
+    // real thing.
+    val keystoreFile = rootProject.file("keystore/brightmarket.jks")
+    val keystorePassword: String = System.getenv("KEYSTORE_PASSWORD") ?: ""
+    val canSignRelease = keystoreFile.exists() && keystorePassword.isNotEmpty()
+
     signingConfigs {
-        getByName("debug") {
-            storeFile = file("../keystore/brightmarket.jks")
-            storePassword = "brightmarket"
-            keyAlias = "brightmarket"
-            keyPassword = "brightmarket"
+        if (canSignRelease) {
+            create("release") {
+                storeFile = keystoreFile
+                storePassword = keystorePassword
+                keyAlias = "brightmarket"
+                keyPassword = keystorePassword
+            }
         }
     }
 
@@ -60,8 +76,7 @@ android {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Same committed key as debug, so either APK upgrades over the other.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (canSignRelease) signingConfigs.getByName("release") else null
         }
     }
 

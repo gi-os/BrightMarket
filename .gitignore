@@ -6,3 +6,6 @@ build/
 captures/
 .externalNativeBuild/
 .cxx/
+
+# The release key is a CI secret (KEYSTORE_B64), restored at build time.
+keystore/

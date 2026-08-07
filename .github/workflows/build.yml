@@ -52,6 +52,18 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPORT_TOKEN: ${{ secrets.REPORT_TOKEN }}
 
+      # The signing key is a secret, not a file in the repo. Written here and
+      # nowhere else; the path is gitignored so a local checkout can't commit it
+      # back by accident.
+      - name: Restore signing keystore
+        run: |
+          mkdir -p keystore
+          echo "${{ secrets.KEYSTORE_B64 }}" | base64 -d > keystore/brightmarket.jks
+          # A missing or truncated secret would otherwise fall through to an
+          # unsigned release that the fingerprint step rejects with a confusing
+          # message. Fail here, where the cause is obvious.
+          test -s keystore/brightmarket.jks || { echo '::error::KEYSTORE_B64 is empty'; exit 1; }
+
       - name: Build APKs
         run: ./gradlew :app:assembleDebug :app:assembleRelease --stacktrace
         env:
@@ -59,6 +71,7 @@ jobs:
           GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPORT_TOKEN: ${{ secrets.REPORT_TOKEN }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
 
       - name: Collect APK
         run: |
