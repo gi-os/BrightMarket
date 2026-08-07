@@ -4,6 +4,14 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.8
+
+**Refresh tells you what it found.** A refresh that turns up nothing new
+changes nothing on screen, which is indistinguishable from the button not
+working. It now reports the result — "up to date", or how many updates are
+waiting — and shows that it is busy while it runs. The fetch on launch stays
+silent; announcing that one would be noise on every start.
+
 ## v1.7
 
 **Fixes the installed list properly.** Since Android 11 an app cannot see other

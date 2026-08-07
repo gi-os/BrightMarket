@@ -77,6 +77,15 @@ class MainActivity : ComponentActivity() {
     private var trackedRows by mutableStateOf<List<TrackedRow>>(emptyList())
     private var followed by mutableStateOf<Set<String>>(emptySet())
 
+    /**
+     * True only for a refresh the user asked for.
+     *
+     * A refresh that finds nothing new changes nothing on screen, which is
+     * indistinguishable from the button not working. The startup fetch must
+     * stay silent though -- announcing it would be noise on every launch.
+     */
+    private var manualRefresh = false
+
     private val pickExport = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -235,6 +244,7 @@ class MainActivity : ComponentActivity() {
                         onScan = { scanning = true },
                         onRefresh = {
                             if (!loading) {
+                                manualRefresh = true
                                 refresh()
                                 refreshTracked()
                             }
@@ -448,8 +458,26 @@ class MainActivity : ComponentActivity() {
                         if (selected == null) toast("That app isn't in the index.")
                         pendingPkg = null
                     }
+                    if (manualRefresh) {
+                        // Say what the refresh FOUND, not merely that it ran.
+                        // "Refreshed" alone leaves you no better informed than
+                        // before you pressed it.
+                        val (updates, _, _) =
+                            Index.partitionInstalled(apps, installed, packageName, followed)
+                        toast(
+                            when (updates.size) {
+                                0 -> "Up to date · ${apps.size} apps"
+                                1 -> "1 update available"
+                                else -> "${updates.size} updates available"
+                            }
+                        )
+                    }
                 }
-                .onFailure { error = "Couldn't reach the index. Check your connection." }
+                .onFailure {
+                    error = "Couldn't reach the index. Check your connection."
+                    if (manualRefresh) toast("Couldn't reach the index.")
+                }
+            manualRefresh = false
             loading = false
         }
     }

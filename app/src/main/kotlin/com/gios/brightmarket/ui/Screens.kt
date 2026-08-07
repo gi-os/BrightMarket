@@ -60,8 +60,18 @@ fun TopBar(
         if (onScan != null || onRefresh != null) {
             Spacer(Modifier.weight(1f))
             if (onRefresh != null) {
-                Box(Modifier.lightClickable(onClick = onRefresh)) {
-                    IconRefresh(if (refreshing) Light.ContentSecondary else Light.Content)
+                if (refreshing) {
+                    // A word, not a spinner: LightOS has no spinner anywhere,
+                    // and a dimmed icon alone is too subtle to read as "busy".
+                    Text(
+                        "…",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Light.ContentSecondary,
+                    )
+                } else {
+                    Box(Modifier.lightClickable(onClick = onRefresh)) {
+                        IconRefresh(Light.Content)
+                    }
                 }
                 Spacer(Modifier.width(gridUnits(1f)))
             }
