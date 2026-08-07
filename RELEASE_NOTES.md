@@ -4,6 +4,20 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.12
+
+**The uninstall button is now big enough to press.** It shipped as small text
+with no padding around it, so the thing you could actually hit was about the
+height of the letters — roughly 20dp, against the 48dp Android treats as the
+minimum. Near misses landed on the row underneath and opened the app's page,
+which looks exactly like a button that doesn't work.
+
+It's full-size on both the list and the app's own page now, with the padding
+inside the tap target rather than around it. And if the system uninstaller
+can't be opened for some reason, it says so instead of failing silently — a tap
+that does nothing and says nothing is the same thing as a broken button from
+where you're sitting.
+
 ## v1.11
 
 **Uninstall is in the app now.** Removing something you'd installed meant going

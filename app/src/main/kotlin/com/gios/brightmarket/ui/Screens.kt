@@ -663,12 +663,20 @@ private fun UpdateRow(
         // tapped by accident. Not offered for BrightMarket itself, which cannot
         // uninstall the process asking.
         if (!entry.isSelf && progress == null) {
-            Spacer(Modifier.height(gridUnits(0.2f)))
             Text(
                 "UNINSTALL",
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelLarge,
                 color = Light.ContentSecondary,
-                modifier = Modifier.lightClickable { onUninstall(entry) },
+                // The padding IS the fix. This was labelSmall with no padding,
+                // so the tap target was the height of the glyphs -- around 20dp
+                // against Android's 48dp minimum. Every near miss landed on the
+                // row underneath and opened the app's page instead, which reads
+                // as the button doing nothing. Applied inside lightClickable so
+                // the padding is part of what you can hit, not a margin around
+                // it.
+                modifier = Modifier
+                    .lightClickable { onUninstall(entry) }
+                    .padding(top = gridUnits(0.5f), bottom = gridUnits(0.5f), end = gridUnits(2f)),
             )
         }
     }
@@ -774,12 +782,17 @@ fun DetailScreen(
             // itself. `detail` rather than `button` weight: it belongs on the
             // page but should not compete with Install for the eye.
             if (installedVersionCode != null && !isSelf && progress == null) {
-                Spacer(Modifier.height(gridUnits(0.8f)))
+                Spacer(Modifier.height(gridUnits(0.6f)))
                 Text(
                     "UNINSTALL",
-                    style = MaterialTheme.typography.labelSmall,
+                    // labelLarge, matching INSTALL. It is the same kind of act
+                    // and needs the same target; kept in secondary colour so it
+                    // still doesn't compete for the eye.
+                    style = MaterialTheme.typography.labelLarge,
                     color = Light.ContentSecondary,
-                    modifier = Modifier.lightClickable(onClick = onUninstall),
+                    modifier = Modifier
+                        .lightClickable(onClick = onUninstall)
+                        .padding(top = gridUnits(0.5f), bottom = gridUnits(0.5f), end = gridUnits(2f)),
                 )
             }
 

@@ -417,12 +417,24 @@ class MainActivity : ComponentActivity() {
      * in onCreate is what refreshes the list, so the same code path handles an
      * uninstall from here and one done from LightOS settings.
      */
+    @Suppress("DEPRECATION")
     private fun uninstall(pkg: String) {
         if (pkg == packageName) return
-        val intent = Intent(Intent.ACTION_DELETE, Uri.parse("package:$pkg"))
-        runCatching { startActivity(intent) }.onFailure {
-            toast("Couldn't open the uninstaller for $pkg")
+
+        // ACTION_DELETE first, then ACTION_UNINSTALL_PACKAGE. The second is
+        // deprecated but is still what some builds route to, and trying both is
+        // cheaper than being wrong on a device I can't test.
+        val attempts = listOf(
+            Intent(Intent.ACTION_DELETE, Uri.parse("package:$pkg")),
+            Intent(Intent.ACTION_UNINSTALL_PACKAGE, Uri.parse("package:$pkg")),
+        )
+        for (intent in attempts) {
+            if (runCatching { startActivity(intent); true }.getOrDefault(false)) return
         }
+        // Said out loud rather than swallowed. A tap that does nothing and says
+        // nothing is indistinguishable from a broken button, which is exactly
+        // how this got reported the first time.
+        toast("Couldn't open the uninstaller — remove $pkg from Settings")
     }
 
     /**
