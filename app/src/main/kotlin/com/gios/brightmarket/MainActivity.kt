@@ -291,7 +291,6 @@ class MainActivity : ComponentActivity() {
                                 Followed.remove(this@MainActivity, app.pkg)
                                 followed = Followed.all(this@MainActivity)
                             },
-                            onUninstall = { entry -> uninstall(entry.app.pkg) },
                         )
 
                         else -> SettingsScreen(

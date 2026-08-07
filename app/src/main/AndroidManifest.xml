@@ -5,6 +5,14 @@
     <!-- Without this the PackageInstaller session can't even reach the system's
          own confirmation dialog. It is not a silent-install permission. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!--
+        Required to launch the system uninstaller at all. Without it ACTION_DELETE
+        is refused before any UI appears, which is why the uninstall action did
+        nothing no matter how large the tap target was made. It grants no power
+        to remove anything: the system still shows its own confirmation and the
+        user still has to agree. This only buys the right to ask.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <!-- Scanning a QR from the desktop catalogue, or a GitHub repo URL. -->
     <uses-permission android:name="android.permission.CAMERA" />
 

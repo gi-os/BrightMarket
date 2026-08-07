@@ -483,7 +483,6 @@ fun UpdatesScreen(
     onInstallTracked: (TrackedRow) -> Unit,
     onForgetTracked: (TrackedRow) -> Unit,
     onRemoveFollowed: (App) -> Unit,
-    onUninstall: (Installed) -> Unit,
 ) {
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     // The wheel scrolls it: on a 472dp panel this list runs well past the fold,
@@ -524,14 +523,14 @@ fun UpdatesScreen(
                 )
             }
             items(updates, key = { it.app.pkg }) { entry ->
-                UpdateRow(entry, progressFor[entry.app.pkg], onUninstall) { onOpen(entry.app) }
+                UpdateRow(entry, progressFor[entry.app.pkg]) { onOpen(entry.app) }
             }
         }
 
         if (upToDate.isNotEmpty()) {
             item { SectionHeader("INSTALLED, UP TO DATE (${upToDate.size})") }
             items(upToDate, key = { it.app.pkg }) { entry ->
-                UpdateRow(entry, progressFor[entry.app.pkg], onUninstall) { onOpen(entry.app) }
+                UpdateRow(entry, progressFor[entry.app.pkg]) { onOpen(entry.app) }
             }
         }
 
@@ -652,12 +651,7 @@ private fun SectionHeader(text: String) {
 }
 
 @Composable
-private fun UpdateRow(
-    entry: Installed,
-    progress: Installer.Progress?,
-    onUninstall: (Installed) -> Unit,
-    onClick: () -> Unit,
-) {
+private fun UpdateRow(entry: Installed, progress: Installer.Progress?, onClick: () -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -686,30 +680,6 @@ private fun UpdateRow(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
-        // Uninstalling was only possible from LightOS's own settings, which is
-        // several screens away and not somewhere anyone thinks to look from a
-        // list of installed apps. Sits under the row rather than beside the
-        // name: it is the least likely thing you came here to do, and putting a
-        // destructive action next to the one you tap constantly is how it gets
-        // tapped by accident. Not offered for BrightMarket itself, which cannot
-        // uninstall the process asking.
-        if (!entry.isSelf && progress == null) {
-            Text(
-                "UNINSTALL",
-                style = MaterialTheme.typography.labelLarge,
-                color = Light.ContentSecondary,
-                // The padding IS the fix. This was labelSmall with no padding,
-                // so the tap target was the height of the glyphs -- around 20dp
-                // against Android's 48dp minimum. Every near miss landed on the
-                // row underneath and opened the app's page instead, which reads
-                // as the button doing nothing. Applied inside lightClickable so
-                // the padding is part of what you can hit, not a margin around
-                // it.
-                modifier = Modifier
-                    .lightClickable { onUninstall(entry) }
-                    .padding(top = gridUnits(0.5f), bottom = gridUnits(0.5f), end = gridUnits(2f)),
-            )
-        }
     }
 }
 

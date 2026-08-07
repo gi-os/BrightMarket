@@ -4,6 +4,19 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.14
+
+**Uninstall actually works.** It needed `REQUEST_DELETE_PACKAGES` in the
+manifest, which wasn't there. Without it Android refuses the request before any
+UI appears, so the button did nothing regardless of how big it was — v1.12 made
+the tap target larger, which was a real problem but not this one. The permission
+grants no power to remove anything: the system still shows its own confirmation
+and you still have to agree. It only buys the right to ask.
+
+It's also gone from the downloads list. One place to uninstall from, and it's
+the app's own page — a destructive action repeated down every row of a list you
+scroll is asking for it.
+
 ## v1.13
 
 **Nightly builds are a channel you choose now, not the default.**
