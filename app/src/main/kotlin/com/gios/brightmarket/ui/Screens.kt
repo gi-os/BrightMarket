@@ -118,41 +118,52 @@ fun BottomBar(items: List<String>, selected: Int, onSelect: (Int) -> Unit) {
 
 /** LightTextField: a 3-design-px underline across 80% width. No filled box. */
 @Composable
+fun LightTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+) {
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        singleLine = true,
+        textStyle = MaterialTheme.typography.bodyLarge.copy(color = Light.Content),
+        cursorBrush = SolidColor(Light.Content),
+        modifier = modifier
+            .fillMaxWidth(0.8f)
+            .drawBehind {
+                drawLine(
+                    color = Light.ContentSecondary,
+                    start = Offset(0f, size.height),
+                    end = Offset(size.width, size.height),
+                    strokeWidth = 3f,
+                )
+            },
+        decorationBox = { inner ->
+            Box(Modifier.padding(vertical = gridUnits(0.3f))) {
+                if (value.isEmpty()) {
+                    Text(
+                        placeholder,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Light.ContentSecondary,
+                    )
+                }
+                inner()
+            }
+        },
+    )
+}
+
+/** Search is the same field with the list's own insets around it. */
+@Composable
 fun SearchField(query: String, onQuery: (String) -> Unit) {
     Box(
         Modifier
             .fillMaxWidth()
             .padding(horizontal = gridUnits(Grid.INSET), vertical = gridUnits(0.4f))
     ) {
-        BasicTextField(
-            value = query,
-            onValueChange = onQuery,
-            singleLine = true,
-            textStyle = MaterialTheme.typography.bodyLarge.copy(color = Light.Content),
-            cursorBrush = SolidColor(Light.Content),
-            modifier = Modifier
-                .fillMaxWidth(0.8f)
-                .drawBehind {
-                    drawLine(
-                        color = Light.ContentSecondary,
-                        start = Offset(0f, size.height),
-                        end = Offset(size.width, size.height),
-                        strokeWidth = 3f,
-                    )
-                },
-            decorationBox = { inner ->
-                Box(Modifier.padding(vertical = gridUnits(0.3f))) {
-                    if (query.isEmpty()) {
-                        Text(
-                            "Search",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = Light.ContentSecondary,
-                        )
-                    }
-                    inner()
-                }
-            },
-        )
+        LightTextField(query, onQuery, "Search")
     }
 }
 
@@ -380,6 +391,22 @@ fun AppRow(app: App, installedVersionCode: Long?, onClick: () -> Unit) {
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
+        // Uninstalling was only possible from LightOS's own settings, which is
+        // several screens away and not somewhere anyone thinks to look from a
+        // list of installed apps. Sits under the row rather than beside the
+        // name: it is the least likely thing you came here to do, and putting a
+        // destructive action next to the one you tap constantly is how it gets
+        // tapped by accident. Not offered for BrightMarket itself, which cannot
+        // uninstall the process asking.
+        if (!entry.isSelf && progress == null) {
+            Spacer(Modifier.height(gridUnits(0.2f)))
+            Text(
+                "UNINSTALL",
+                style = MaterialTheme.typography.labelSmall,
+                color = Light.ContentSecondary,
+                modifier = Modifier.lightClickable { onUninstall(entry) },
+            )
+        }
     }
 }
 
@@ -443,6 +470,7 @@ fun UpdatesScreen(
     onInstallTracked: (TrackedRow) -> Unit,
     onForgetTracked: (TrackedRow) -> Unit,
     onRemoveFollowed: (App) -> Unit,
+    onUninstall: (Installed) -> Unit,
 ) {
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     // The wheel scrolls it: on a 472dp panel this list runs well past the fold,
@@ -483,14 +511,14 @@ fun UpdatesScreen(
                 )
             }
             items(updates, key = { it.app.pkg }) { entry ->
-                UpdateRow(entry, progressFor[entry.app.pkg]) { onOpen(entry.app) }
+                UpdateRow(entry, progressFor[entry.app.pkg], onUninstall) { onOpen(entry.app) }
             }
         }
 
         if (upToDate.isNotEmpty()) {
             item { SectionHeader("INSTALLED, UP TO DATE (${upToDate.size})") }
             items(upToDate, key = { it.app.pkg }) { entry ->
-                UpdateRow(entry, progressFor[entry.app.pkg]) { onOpen(entry.app) }
+                UpdateRow(entry, progressFor[entry.app.pkg], onUninstall) { onOpen(entry.app) }
             }
         }
 
@@ -611,7 +639,12 @@ private fun SectionHeader(text: String) {
 }
 
 @Composable
-private fun UpdateRow(entry: Installed, progress: Installer.Progress?, onClick: () -> Unit) {
+private fun UpdateRow(
+    entry: Installed,
+    progress: Installer.Progress?,
+    onUninstall: (Installed) -> Unit,
+    onClick: () -> Unit,
+) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -650,7 +683,10 @@ fun DetailScreen(
     app: App,
     installedVersionCode: Long?,
     progress: Installer.Progress?,
+    /** BrightMarket can't uninstall the process running this screen. */
+    isSelf: Boolean,
     onInstall: () -> Unit,
+    onUninstall: () -> Unit,
     onBack: () -> Unit,
 ) {
     // The system back gesture must leave the page. Without this the only way out
@@ -731,6 +767,19 @@ fun DetailScreen(
                     progress.reason,
                     style = MaterialTheme.typography.bodySmall,
                     color = Light.ContentSecondary,
+                )
+            }
+
+            // Only once it is actually on the phone, and never for BrightMarket
+            // itself. `detail` rather than `button` weight: it belongs on the
+            // page but should not compete with Install for the eye.
+            if (installedVersionCode != null && !isSelf && progress == null) {
+                Spacer(Modifier.height(gridUnits(0.8f)))
+                Text(
+                    "UNINSTALL",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Light.ContentSecondary,
+                    modifier = Modifier.lightClickable(onClick = onUninstall),
                 )
             }
 

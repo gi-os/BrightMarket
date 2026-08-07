@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.Uri
 import androidx.core.content.ContextCompat
 import android.os.Bundle
 import android.widget.Toast
@@ -217,7 +218,9 @@ class MainActivity : ComponentActivity() {
                         app = app,
                         installedVersionCode = installed[app.pkg],
                         progress = progress,
+                        isSelf = app.pkg == packageName,
                         onInstall = { install(app) },
+                        onUninstall = { uninstall(app.pkg) },
                         onBack = { selected = null },
                     )
                     return@BrightMarketTheme
@@ -285,6 +288,7 @@ class MainActivity : ComponentActivity() {
                                 Followed.remove(this@MainActivity, app.pkg)
                                 followed = Followed.all(this@MainActivity)
                             },
+                            onUninstall = { entry -> uninstall(entry.app.pkg) },
                         )
 
                         else -> SettingsScreen(
@@ -364,9 +368,11 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * A scanned code. Two shapes are accepted: a brightmarket:// link from the
-     * desktop catalogue, and a plain GitHub repo URL — the second is what makes
-     * this useful for apps nobody has submitted.
+     * Something to add, from the scanner or from the paste field beside it.
+     *
+     * Three shapes: a brightmarket:// link from the desktop catalogue, a GitHub
+     * repo URL — which is what makes this useful for apps nobody has submitted
+     * — and a direct link to an .apk.
      */
     private fun onScanned(text: String) {
         val link = Focus.parseLink(text)
@@ -374,9 +380,19 @@ class MainActivity : ComponentActivity() {
             handleLinkValue(link)
             return
         }
+
+        // A bare .apk URL installs once and is not tracked afterwards. Nothing
+        // to track: a file on a web server has no releases to watch and no way
+        // to say what it will be called next. Saying so at install time is
+        // better than adding a row that would never update and look broken.
+        if (looksLikeApkUrl(text)) {
+            installFromUrl(text.trim())
+            return
+        }
+
         val repo = Tracked.repoFromAny(text)
         if (repo == null) {
-            toast("That code isn't a BrightMarket link or a GitHub repo.")
+            toast("Not a BrightMarket link, a GitHub repo, or an .apk URL.")
             return
         }
         if (apps.any { it.repo.equals(repo, ignoreCase = true) }) {
@@ -388,6 +404,63 @@ class MainActivity : ComponentActivity() {
         val added = Tracked.add(this, Tracked.Entry(repo = repo))
         toast(if (added) "Tracking $repo" else "Already tracking $repo")
         refreshTracked()
+    }
+
+    /**
+     * Hand the package to the system uninstaller.
+     *
+     * ACTION_DELETE rather than a PackageInstaller session: uninstalling needs
+     * DELETE_PACKAGES, which is a system permission no sideloaded app can hold,
+     * so the dialog is not a fallback here — it is the only route that exists.
+     *
+     * Nothing is done with the result. The package-removed broadcast registered
+     * in onCreate is what refreshes the list, so the same code path handles an
+     * uninstall from here and one done from LightOS settings.
+     */
+    private fun uninstall(pkg: String) {
+        if (pkg == packageName) return
+        val intent = Intent(Intent.ACTION_DELETE, Uri.parse("package:$pkg"))
+        runCatching { startActivity(intent) }.onFailure {
+            toast("Couldn't open the uninstaller for $pkg")
+        }
+    }
+
+    /**
+     * https and ending in .apk, ignoring any query string.
+     *
+     * http is refused rather than upgraded: an APK fetched over a connection
+     * anyone on the network can rewrite is the one download where that matters
+     * most, and there is no hash here to catch it — an unlisted APK has nothing
+     * to check against. Silently upgrading to https would also lie about what
+     * was asked for.
+     */
+    private fun looksLikeApkUrl(text: String): Boolean {
+        val t = text.trim()
+        if (!t.startsWith("https://", ignoreCase = true)) return false
+        return t.substringBefore('?').substringBefore('#').endsWith(".apk", ignoreCase = true)
+    }
+
+    private fun installFromUrl(url: String) {
+        val key = url
+        lifecycleScope.launch {
+            Installer.install(
+                ctx = this@MainActivity,
+                apkUrl = url,
+                // No hash: nothing generated one. Same footing as a tracked
+                // repo, and marked the same way in the list it lands in.
+                expectedSha256 = null,
+                // Only used to name the file in cacheDir. Empty would make it
+                // ".apk" -- a hidden file, and the same one for every download.
+                pkg = "direct-" + url.hashCode().toUInt().toString(16),
+                onProgress = { p -> progressFor = progressFor + (key to p) },
+                // Nothing to record. Tracked.setPkg keys on a repo, and there
+                // isn't one here -- a file on a web server has no releases to
+                // watch. The install still happens; it just isn't followed
+                // afterwards, which is what the caller's comment says.
+            )
+            progressFor = progressFor - key
+            refreshInstalled()
+        }
     }
 
     private fun installTracked(row: TrackedRow) {

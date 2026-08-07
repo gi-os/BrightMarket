@@ -4,6 +4,29 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.11
+
+**Uninstall is in the app now.** Removing something you'd installed meant going
+to LightOS's own settings and finding it there, which is several screens from
+the list of installed apps and not somewhere anyone thinks to look. There's an
+UNINSTALL under each row in Updates and on each app's page. It sits below the
+row rather than beside the name on purpose — putting a destructive action next
+to the one you tap constantly is how it gets tapped by accident. Android still
+shows its own confirmation, and BrightMarket won't offer to uninstall itself.
+
+**Add an app by pasting a link, not just by scanning one.** The scan screen has
+a field above the viewfinder that takes a GitHub repo, a `brightmarket.gzl.dev`
+link, or a direct `.apk` URL. Scanning assumed the thing you wanted was on
+another screen you could point a camera at; often it arrived in a message on
+this phone, and there was no way to use it.
+
+The field sits above the camera permission prompt, so declining the camera no
+longer means you can't add apps at all. A direct `.apk` link installs once and
+isn't tracked afterwards — a file on a web server has no releases to watch, and
+a row that could never update would just look broken. It has to be `https`:
+there's no hash to check an unlisted APK against, so the connection is the only
+thing standing between you and whatever else the network felt like sending.
+
 ## v1.10
 
 **You have to reinstall this one.** Sorry. Every build up to v1.9 was signed with a
