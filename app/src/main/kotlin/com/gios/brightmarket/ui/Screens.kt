@@ -1,5 +1,6 @@
 package com.gios.brightmarket.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicTextField
@@ -381,7 +382,25 @@ fun DetailScreen(
             .background(Light.Background)
             .verticalScroll(rememberScrollState())
     ) {
-        TopBar("BRIGHTMARKET")
+        // The system back gesture/key must leave the page. Without this the only
+        // way out was the BACK text at the very bottom, which the screenshot
+        // strip pushed below the fold -- the page read as a dead end.
+        BackHandler(onBack = onBack)
+
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(gridUnits(3f))
+                .lightClickable(onClick = onBack)
+                .padding(horizontal = gridUnits(1f)),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "< BACK",
+                style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                color = Light.ContentSecondary,
+            )
+        }
 
         Column(Modifier.padding(horizontal = gridUnits(1f))) {
             // The bar's title is set in `fine` and reads as chrome. The product

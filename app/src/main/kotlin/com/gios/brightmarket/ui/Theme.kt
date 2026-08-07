@@ -4,6 +4,7 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -103,6 +104,16 @@ fun BrightMarketTheme(content: @Composable () -> Unit) {
             onPrimary = Light.Background,
         ),
         typography = lightTypography(),
-        content = content,
-    )
+    ) {
+        // Material3's Text falls back to LocalContentColor, and that local
+        // defaults to BLACK -- it is normally supplied by a Surface, which this
+        // app deliberately doesn't use (Surface brings elevation and tonal
+        // overlays that appear nowhere in LightOS). Without this, every Text
+        // that doesn't name a colour renders black on a black background and is
+        // simply invisible. The colorScheme above does NOT cover it: onBackground
+        // is only consulted by components that read it, not by bare Text.
+        CompositionLocalProvider(LocalContentColor provides Light.Content) {
+            content()
+        }
+    }
 }
