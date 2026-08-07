@@ -1,7 +1,23 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+/**
+ * The key shake-to-report posts issues with. Never in the repository:
+ * local.properties is git-ignored and CI hands it in from a secret. An empty
+ * string is a working build -- reports queue on the phone and go out from a
+ * later build that has the key.
+ */
+val reportToken: String = run {
+    val local = rootProject.file("local.properties")
+    val fromFile = if (local.exists()) {
+        Properties().apply { local.inputStream().use { load(it) } }.getProperty("reportToken")
+    } else null
+    fromFile ?: System.getenv("REPORT_TOKEN") ?: ""
 }
 
 android {
@@ -17,9 +33,12 @@ android {
         targetSdk = 35
         // CI overwrites both from the workflow run number; see .github/workflows/build.yml
         versionCode = 1
-        versionName = "1.3.0"
+        versionName = "1.4.0"
 
         ndk { abiFilters += "arm64-v8a" }
+
+        // LightReport.install reads this at startup.
+        buildConfigField("String", "REPORT_TOKEN", "\"$reportToken\"")
 
         buildConfigField(
             "String",
@@ -88,6 +107,11 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:$camerax")
     implementation("androidx.camera:camera-view:$camerax")
     implementation("com.google.zxing:core:3.5.3")
+
+    // The shared Light layer: the hardware wheel and shake-to-report, which
+    // every other app in the portfolio already uses. Reimplementing either here
+    // would be a second copy to keep in step with the first.
+    implementation("com.gios:light-common:1.2.1")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 

@@ -77,6 +77,11 @@ object Tracked {
         prefs(ctx).edit().putString(KEY, arr.toString()).apply()
     }
 
+    /** Record what an installed APK turned out to be, so updates can be compared. */
+    fun setPkg(ctx: Context, repo: String, pkg: String) {
+        save(ctx, all(ctx).map { if (it.repo.equals(repo, true)) it.copy(pkg = pkg) else it })
+    }
+
     fun add(ctx: Context, entry: Entry): Boolean {
         val existing = all(ctx)
         if (existing.any { it.repo.equals(entry.repo, ignoreCase = true) }) return false

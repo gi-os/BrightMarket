@@ -163,7 +163,7 @@ class IndexTest {
 
     @Test fun `partition splits updatable from up to date`() {
         val apps = Index.parse(sample)   // BrightTip vc=18, BrightNoise vc=9
-        val (updates, current) = Index.partitionInstalled(
+        val (updates, current, _) = Index.partitionInstalled(
             apps,
             mapOf("com.gios.lighttip" to 17L, "com.gios.lightnoise" to 9L),
         )
@@ -173,7 +173,7 @@ class IndexTest {
 
     @Test fun `apps that are not installed appear in neither list`() {
         val apps = Index.parse(sample)
-        val (updates, current) = Index.partitionInstalled(apps, emptyMap())
+        val (updates, current, _) = Index.partitionInstalled(apps, emptyMap())
         assertEquals(0, updates.size)
         assertEquals(0, current.size)
     }
@@ -183,7 +183,7 @@ class IndexTest {
         // That must read as up-to-date, not as a downgrade offer -- Android
         // would refuse the install anyway.
         val apps = Index.parse(sample)
-        val (updates, current) = Index.partitionInstalled(
+        val (updates, current, _) = Index.partitionInstalled(
             apps, mapOf("com.gios.lighttip" to 999L)
         )
         assertEquals(0, updates.size)
@@ -195,7 +195,7 @@ class IndexTest {
         // of 9 is OLDER, even though the string "1.1.9" > "1.3.18" is false and
         // naive string comparison of names gets this backwards.
         val apps = Index.parse(sample)
-        val (updates, _) = Index.partitionInstalled(apps, mapOf("com.gios.lighttip" to 9L))
+        val (updates, _, _) = Index.partitionInstalled(apps, mapOf("com.gios.lighttip" to 9L))
         assertEquals(1, updates.size)
         assertTrue(updates.first().updatable)
     }
@@ -225,7 +225,7 @@ class IndexTest {
     @Test fun `the marketplace entry is flagged as self`() {
         val self = "com.gios.lighttip"   // stand-in for our own package
         val apps = Index.parse(sample)
-        val (updates, _) = Index.partitionInstalled(apps, mapOf(self to 1L), self)
+        val (updates, _, _) = Index.partitionInstalled(apps, mapOf(self to 1L), self)
         assertTrue(updates.first().isSelf)
     }
 
@@ -291,6 +291,35 @@ class IndexTest {
         val a = Tracked.Entry(repo = "termux/termux-app")
         val b = Tracked.Entry(repo = "Termux/Termux-App")
         assertEquals(1, listOf(a, b).distinctBy { it.repo.lowercase() }.size)
+    }
+
+
+    @Test fun `followed apps that are not installed are listed separately`() {
+        // This is what makes an import visible: matching an app the index
+        // carries used to do nothing on screen unless it happened to already
+        // be on the phone.
+        val apps = Index.parse(sample)
+        val (updates, current, notInstalled) = Index.partitionInstalled(
+            apps,
+            installed = emptyMap(),
+            selfPkg = "",
+            followed = setOf("com.gios.lighttip"),
+        )
+        assertEquals(0, updates.size)
+        assertEquals(0, current.size)
+        assertEquals(listOf("BrightTip"), notInstalled.map { it.name })
+    }
+
+    @Test fun `a followed app that IS installed is not listed twice`() {
+        val apps = Index.parse(sample)
+        val (_, current, notInstalled) = Index.partitionInstalled(
+            apps,
+            installed = mapOf("com.gios.lighttip" to 18L),
+            selfPkg = "",
+            followed = setOf("com.gios.lighttip"),
+        )
+        assertEquals(listOf("BrightTip"), current.map { it.app.name })
+        assertEquals(0, notInstalled.size)
     }
 
 }

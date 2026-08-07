@@ -10,6 +10,9 @@ on:
 
 permissions:
   contents: write
+  # light-common is a GitHub Packages artifact, and even a public package needs
+  # an authenticated read.
+  packages: read
 
 jobs:
   build:
@@ -43,9 +46,19 @@ jobs:
       # available" forever -- so they gate the build.
       - name: Unit tests
         run: ./gradlew :app:testDebugUnitTest --stacktrace
+        env:
+          # light-common resolves from GitHub Packages, which has no anonymous read.
+          GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPORT_TOKEN: ${{ secrets.REPORT_TOKEN }}
 
       - name: Build APKs
         run: ./gradlew :app:assembleDebug :app:assembleRelease --stacktrace
+        env:
+          # light-common resolves from GitHub Packages, which has no anonymous read.
+          GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPORT_TOKEN: ${{ secrets.REPORT_TOKEN }}
 
       - name: Collect APK
         run: |

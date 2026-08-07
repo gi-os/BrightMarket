@@ -4,6 +4,27 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.4
+
+**Imported apps show up whether or not they're installed.** An Obtainium
+import matched the apps BrightMarket indexes and then did nothing visible with
+them, because the Updates tab only ever listed what the phone reported as
+installed. They now appear under **IN YOUR LIST, NOT INSTALLED**, one tap from
+installing, and are watched from then on.
+
+**Remove things.** Anything in your list can be removed, and any tracked repo
+can be forgotten.
+
+**Scanned repos can finally be updated.** A GitHub release doesn't say which
+package it installs, so a scanned repo had no applicationId — meaning the app
+could never tell whether it was installed and never offered an update for it.
+The APK is now read with the platform's own parser as it installs, which is the
+one moment that information exists, and remembered.
+
+**The wheel and shake-to-report.** Both from light-common, the same shared layer
+every other app in the portfolio uses: the wheel scrolls the lists, and shaking
+the phone files a report.
+
 ## v1.3
 
 **Obtainium import now actually keeps your apps.** It read the export, counted

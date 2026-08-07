@@ -14,12 +14,15 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import com.gios.brightmarket.data.App
 import com.gios.brightmarket.data.Focus
+import com.gios.brightmarket.data.Followed
 import com.gios.brightmarket.data.Index
 import com.gios.brightmarket.data.Obtainium
 import com.gios.brightmarket.data.Sort
 import com.gios.brightmarket.data.Tracked
 import com.gios.brightmarket.install.Installer
 import com.gios.brightmarket.ui.*
+import com.gios.light.common.report.LightReport
+import com.gios.light.common.report.ReportOverlay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -52,6 +55,7 @@ class MainActivity : ComponentActivity() {
 
     private var scanning by mutableStateOf(false)
     private var trackedRows by mutableStateOf<List<TrackedRow>>(emptyList())
+    private var followed by mutableStateOf<Set<String>>(emptySet())
 
     private val pickExport = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -79,6 +83,13 @@ class MainActivity : ComponentActivity() {
             // count and dropping them made this a migration that only looked
             // finished: someone replacing Obtainium would have quietly stopped
             // getting updates for everything it was watching.
+            // Follow the ones BrightMarket DOES index. Matching them was
+            // previously invisible: the Updates tab only listed what
+            // PackageManager reported, so anything not already on the phone
+            // went nowhere and the import looked like it had skipped them.
+            val nowFollowed = Followed.add(this@MainActivity, result.matched.map { it.pkg })
+            followed = Followed.all(this@MainActivity)
+
             val toTrack = Obtainium.trackable(result.unmatched)
             val existing = Tracked.all(this@MainActivity)
             val merged = (existing + toTrack).distinctBy { it.repo.lowercase() }
@@ -94,6 +105,7 @@ class MainActivity : ComponentActivity() {
                 buildString {
                     append("Imported ${entries.size}: ")
                     append("${result.matched.size} in BrightMarket")
+                    if (nowFollowed > 0) append(" ($nowFollowed new)")
                     if (added > 0) append(", $added now tracked")
                     if (unusable > 0) append(", $unusable with no GitHub repo skipped")
                 }
@@ -104,12 +116,23 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Shake to report, from light-common: the same gesture and the same
+        // light-reports repo every other app in the portfolio uses.
+        LightReport.install(
+            context = this,
+            appName = "BrightMarket",
+            label = "market",
+            token = BuildConfig.REPORT_TOKEN,
+        )
+
+        followed = Followed.all(this)
         onboarded = Focus.onboarded(this)
         focusMode = Focus.enabled(this)
         handleLink(intent)
 
         setContent {
             BrightMarketTheme {
+                ReportOverlay()
                 if (!onboarded) {
                     OnboardingScreen { focus ->
                         Focus.choose(this, focus)
@@ -148,7 +171,8 @@ class MainActivity : ComponentActivity() {
                     return@BrightMarketTheme
                 }
 
-                val (updates, upToDate) = Index.partitionInstalled(apps, installed, packageName)
+                val (updates, upToDate, notInstalled) =
+                    Index.partitionInstalled(apps, installed, packageName, followed)
 
                 // Three destinations, which is the SDK's hard ceiling for a
                 // bottom bar containing any text item.
@@ -195,6 +219,7 @@ class MainActivity : ComponentActivity() {
                         "Updates" -> UpdatesScreen(
                             updates = updates,
                             upToDate = upToDate,
+                            notInstalled = notInstalled,
                             tracked = trackedRows,
                             progressFor = progressFor,
                             loading = loading,
@@ -203,6 +228,10 @@ class MainActivity : ComponentActivity() {
                             onOpen = { selected = it; progress = null },
                             onInstallTracked = ::installTracked,
                             onForgetTracked = ::forgetTracked,
+                            onRemoveFollowed = { app ->
+                                Followed.remove(this@MainActivity, app.pkg)
+                                followed = Followed.all(this@MainActivity)
+                            },
                         )
 
                         else -> SettingsScreen(
@@ -314,6 +343,13 @@ class MainActivity : ComponentActivity() {
                 expectedSha256 = null,
                 pkg = row.pkg ?: "",
                 onProgress = { p -> progressFor = progressFor + (key to p) },
+                onIdentified = { id, _ ->
+                    // A GitHub release doesn't say which package it installs, so
+                    // this is the only moment we can find out -- and without it
+                    // a tracked app can never be compared against what's on the
+                    // phone, so it would never show an update.
+                    if (row.pkg == null) Tracked.setPkg(this@MainActivity, row.repo, id)
+                },
             )
             progressFor = progressFor - key
             refreshInstalled()

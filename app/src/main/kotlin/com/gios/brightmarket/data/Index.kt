@@ -70,17 +70,38 @@ object Index {
      * Bright app's CI stamps versionCode from its monotonic run number. Getting
      * this wrong reads to the user as "no update available", forever, silently.
      */
+    /**
+     * Split the index three ways: has an update, installed and current, and
+     * followed-but-not-installed.
+     *
+     * The third list is what makes an import visible. Before it existed, only
+     * what PackageManager reported was ever shown, so importing an export did
+     * nothing on screen for the apps BrightMarket actually indexes — which read
+     * as the import having skipped them.
+     *
+     * Comparison is on versionCode, never the version *name*. Names are
+     * marketing strings — "1.10.0" sorts before "1.9.0" as text — while every
+     * Bright app's CI stamps versionCode from its monotonic run number. Getting
+     * this wrong reads as "no update available", forever, silently.
+     */
     fun partitionInstalled(
         apps: List<App>,
         installed: Map<String, Long>,
         selfPkg: String = "",
-    ): Pair<List<Installed>, List<Installed>> {
+        followed: Set<String> = emptySet(),
+    ): Triple<List<Installed>, List<Installed>, List<App>> {
         val present = apps.mapNotNull { app ->
             installed[app.pkg]?.let { Installed(app, it, app.pkg == selfPkg) }
         }
         val (updates, current) = present.partition { it.updatable }
-        return updates.sortedByDescending { it.app.publishedAt } to
-            current.sortedBy { it.app.name.lowercase() }
+        val notInstalled = apps
+            .filter { it.pkg in followed && it.pkg !in installed }
+            .sortedBy { it.name.lowercase() }
+        return Triple(
+            updates.sortedByDescending { it.app.publishedAt },
+            current.sortedBy { it.app.name.lowercase() },
+            notInstalled,
+        )
     }
 
     /**

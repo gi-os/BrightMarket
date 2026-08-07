@@ -33,6 +33,24 @@ object Installer {
         data class Failed(val reason: String) : Progress
     }
 
+    /**
+     * Read the applicationId and versionCode out of a downloaded APK.
+     *
+     * This is how a scanned repo learns what it actually is. A tracked repo
+     * gives us only "owner/name" — nothing in a GitHub release says which
+     * package it installs — so without this the app can never tell whether a
+     * tracked app is installed, and never offers an update for it.
+     *
+     * getPackageArchiveInfo is the platform's own parser, so no aapt and no
+     * manifest-guessing: the numbers are the ones PackageManager will use.
+     */
+    fun readApk(ctx: Context, file: File): Pair<String, Long>? =
+        runCatching {
+            val info = ctx.packageManager.getPackageArchiveInfo(file.absolutePath, 0)
+                ?: return null
+            info.packageName to info.longVersionCode
+        }.getOrNull()
+
     /** True when [versionCode] is newer than what's on the device. */
     fun updateAvailable(ctx: Context, pkg: String, versionCode: Long): Boolean {
         val installed = installedVersionCode(ctx, pkg) ?: return false
@@ -59,6 +77,8 @@ object Installer {
         expectedSha256: String?,
         pkg: String,
         onProgress: (Progress) -> Unit = {},
+        /** Called with (applicationId, versionCode) once the APK is on disk. */
+        onIdentified: (String, Long) -> Unit = { _, _ -> },
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             val apk = File(ctx.cacheDir, "$pkg.apk")
@@ -76,8 +96,13 @@ object Installer {
             }
             }
 
+            // Learn what this APK actually is before handing it to the
+            // installer -- for a tracked repo this is the only chance to find
+            // out, and it is what makes future update checks possible.
+            readApk(ctx, apk)?.let { (id, code) -> onIdentified(id, code) }
+
             onProgress(Progress.AwaitingConfirmation)
-            commitSession(ctx, apk, pkg)
+            commitSession(ctx, apk, pkg.ifBlank { readApk(ctx, apk)?.first ?: pkg })
             apk.delete()
             // delete() returns Boolean, which would make this Result<Boolean>.
             // The contract is Result<Unit>, and whether the temp copy was still

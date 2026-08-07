@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.gios.brightmarket.data.App
 import com.gios.brightmarket.data.Installed
 import com.gios.brightmarket.data.Sort
+import com.gios.brightmarket.hw.WheelScroll
 import com.gios.brightmarket.install.Installer
 
 // ---------------------------------------------------------------------------
@@ -398,9 +399,13 @@ fun BrowseScreen(
             error != null && apps.isEmpty() -> Message(error)
             apps.isEmpty() && filtering -> Message("Nothing matches that.")
             apps.isEmpty() -> Message("No apps yet.")
-            else -> LazyColumn(Modifier.weight(1f)) {
+            else -> {
+                val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+                WheelScroll(listState)
+                LazyColumn(Modifier.weight(1f), state = listState) {
                 items(apps, key = { it.pkg }) { app ->
                     AppRow(app, installed[app.pkg]) { onOpen(app) }
+                }
                 }
             }
         }
@@ -418,6 +423,7 @@ private fun Message(text: String) {
 fun UpdatesScreen(
     updates: List<Installed>,
     upToDate: List<Installed>,
+    notInstalled: List<App>,
     tracked: List<TrackedRow>,
     progressFor: Map<String, Installer.Progress>,
     loading: Boolean,
@@ -426,9 +432,15 @@ fun UpdatesScreen(
     onOpen: (App) -> Unit,
     onInstallTracked: (TrackedRow) -> Unit,
     onForgetTracked: (TrackedRow) -> Unit,
+    onRemoveFollowed: (App) -> Unit,
 ) {
-    LazyColumn(Modifier.fillMaxSize()) {
-        if (updates.isEmpty() && upToDate.isEmpty()) {
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // The wheel scrolls it: on a 472dp panel this list runs well past the fold,
+    // and reaching over it to drag is the gesture the wheel exists to replace.
+    WheelScroll(listState)
+
+    LazyColumn(Modifier.fillMaxSize(), state = listState) {
+        if (updates.isEmpty() && upToDate.isEmpty() && notInstalled.isEmpty() && tracked.isEmpty()) {
             item {
                 Box(
                     Modifier.fillMaxWidth().padding(gridUnits(2f)),
@@ -469,6 +481,35 @@ fun UpdatesScreen(
             item { SectionHeader("INSTALLED, UP TO DATE (${upToDate.size})") }
             items(upToDate, key = { it.app.pkg }) { entry ->
                 UpdateRow(entry, progressFor[entry.app.pkg]) { onOpen(entry.app) }
+            }
+        }
+
+        if (notInstalled.isNotEmpty()) {
+            // Imported or followed, but not on the phone. Without this an
+            // Obtainium import did nothing visible for the apps BrightMarket
+            // does index, which read as the import having skipped them.
+            item { SectionHeader("IN YOUR LIST, NOT INSTALLED (${notInstalled.size})") }
+            items(notInstalled, key = { it.pkg }) { app ->
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .lightClickable { onOpen(app) }
+                        .padding(horizontal = gridUnits(Grid.INSET), vertical = gridUnits(0.8f))
+                ) {
+                    Text(app.name, style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "v${app.version} · not installed",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Light.ContentSecondary,
+                    )
+                    Spacer(Modifier.height(gridUnits(0.2f)))
+                    Text(
+                        "REMOVE",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Light.ContentSecondary,
+                        modifier = Modifier.lightClickable { onRemoveFollowed(app) },
+                    )
+                }
             }
         }
 
