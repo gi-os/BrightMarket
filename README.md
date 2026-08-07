@@ -137,7 +137,7 @@ opaque `Failure: Invalid` and nothing else. Exactly one APK is attached per rele
 A push to this repo publishes a **nightly**, marked as a prerelease. The
 catalogue skips prereleases, so a nightly is only ever offered to someone who
 has asked for one in Settings → Updates. Official releases are cut deliberately
-— `[release]` in a commit message, or running the workflow by hand.
+— `[release]` in the commit's **subject line**, or running the workflow by hand.
 
 A nightly is verified exactly as hard as a release: the index downloads it,
 hashes it, and reads its versionCode out of the APK. It's only offered when it's
