@@ -6,15 +6,15 @@ and keep them updated — all free, all from GitHub releases.
 ## Install via BrightMarket
 
 <p align="center">
-  <img src="https://gi-os.github.io/brightmarket-index/assets/brightmarket-qr.png" alt="Scan to open BrightMarket" width="180" />
+  <img src="https://gi-os.github.io/brightmarket-index/assets/qr/BrightMarket.png" alt="Scan to open BrightMarket in BrightMarket" width="180" />
 </p>
 
 BrightMarket is the marketplace itself — the client above browses, installs and
 silently updates every other Bright app over ADB, with no PC and no Play Store
-account required. Scan the code above or visit
-**[gi-os.github.io/brightmarket-index/browse.html](https://gi-os.github.io/brightmarket-index/browse.html)** to view every
-app currently listed, read its README, and grab a direct APK link even before
-you have BrightMarket installed.
+account required. If you already have it installed, the code above opens its
+own listing (handy for confirming you're on the signed release build).
+Otherwise, grab the APK directly and browse every app currently listed at
+**[gi-os.github.io/brightmarket-index/browse.html](https://gi-os.github.io/brightmarket-index/browse.html)**.
 
 **Package `com.gios.brightmarket`. minSdk 30** (the rest of the portfolio targets
 29; wireless debugging, which the future silent-install path needs, is Android 11+).
