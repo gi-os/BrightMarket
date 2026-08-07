@@ -7,6 +7,23 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Scanning a QR from the desktop catalogue, or a GitHub repo URL. -->
     <uses-permission android:name="android.permission.CAMERA" />
+
+    <!--
+      Package visibility. Since API 30 an app cannot see other installed
+      packages at all: getPackageInfo throws NameNotFoundException for anything
+      not declared here, whether or not the app is actually installed.
+
+      That silently broke the entire installed/updates model. Every lookup threw,
+      every result was null, so nothing was ever "installed": apps that were
+      plainly on the phone sat under "not installed", and no update was ever
+      offered for anything.
+
+      QUERY_ALL_PACKAGES rather than a queries element because the list isn't
+      knowable at build time: it is whatever the index carries plus whatever
+      repos the user has tracked. Checking what is installed in order to update
+      it is the sanctioned use of this permission for an installer.
+    -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application

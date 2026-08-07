@@ -4,6 +4,18 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.7
+
+**Fixes the installed list properly.** Since Android 11 an app cannot see other
+installed packages at all unless it says so in its manifest — every lookup threw
+and was quietly read as "not installed". That is why nothing ever joined the
+installed section, why apps plainly sitting on the phone were listed as not
+installed, and why no update was ever offered for anything. BrightMarket now
+declares the visibility it needs.
+
+The two previous attempts at this were fixing the wrong thing: the app was
+asking the right question at the right moment and being refused an answer.
+
 ## v1.6
 
 **Installed apps really do move into the installed section now.** The previous

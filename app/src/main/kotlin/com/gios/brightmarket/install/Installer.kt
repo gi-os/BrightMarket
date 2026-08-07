@@ -57,6 +57,15 @@ object Installer {
         return versionCode > installed
     }
 
+    /**
+     * The installed versionCode, or null if the app isn't on the phone.
+     *
+     * Null is also what comes back when the package is merely *invisible* to
+     * us, which is not the same thing and is exactly how this failed silently:
+     * without QUERY_ALL_PACKAGES in the manifest, API 30+ throws
+     * NameNotFoundException for every package regardless of whether it is
+     * installed, and this catch turned all of it into "not installed".
+     */
     fun installedVersionCode(ctx: Context, pkg: String): Long? = try {
         ctx.packageManager.getPackageInfo(pkg, 0).longVersionCode
     } catch (e: PackageManager.NameNotFoundException) {
