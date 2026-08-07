@@ -146,11 +146,37 @@ fun AppRow(
             .lightClickable(onClick = onClick)
             .padding(horizontal = gridUnits(1f), vertical = gridUnits(0.8f))
     ) {
-        Text(app.name, style = androidx.compose.material3.MaterialTheme.typography.bodyLarge)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                app.name,
+                style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
+            )
+            // State reads before the name is finished, and reads without
+            // colour -- there is no accent in the palette, and the panel is
+            // greyscale anyway, so a coloured dot would say nothing.
+            val tag = when {
+                installedVersionCode == null -> null
+                app.versionCode > installedVersionCode -> "UPDATE"
+                else -> "INSTALLED"
+            }
+            if (tag != null) {
+                Spacer(Modifier.width(gridUnits(0.5f)))
+                Text(
+                    tag,
+                    style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                    color = if (tag == "UPDATE") Light.Content else Light.ContentSecondary,
+                )
+            }
+        }
         val status = when {
             installedVersionCode == null -> app.summary
-            app.versionCode > installedVersionCode -> "Update to ${app.version}"
-            else -> "Installed"
+            app.versionCode > installedVersionCode ->
+                // The phone only knows the installed versionCode -- a run
+                // number -- and has no record of the version NAME that shipped
+                // with it. Rendering "v18 → v1.3.19" would imply both sides are
+                // the same kind of number. Label the one we actually have.
+                "build ${installedVersionCode} → v${app.version}"
+            else -> "v${app.version}"
         }
         Text(
             text = status,
@@ -285,6 +311,17 @@ fun UpdatesScreen(
         if (updates.isNotEmpty()) {
             item {
                 Text(
+                    "NEEDS UPDATE (${updates.size})",
+                    style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                    color = Light.ContentSecondary,
+                    modifier = Modifier.padding(
+                        horizontal = gridUnits(1f),
+                        top = gridUnits(1f),
+                    ),
+                )
+            }
+            item {
+                Text(
                     "UPDATE ALL (${updates.size})",
                     style = androidx.compose.material3.MaterialTheme.typography.labelLarge,
                     color = Light.Content,
@@ -306,7 +343,7 @@ fun UpdatesScreen(
         if (upToDate.isNotEmpty()) {
             item {
                 Text(
-                    "UP TO DATE",
+                    "INSTALLED, UP TO DATE (${upToDate.size})",
                     style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
                     color = Light.ContentSecondary,
                     modifier = Modifier.padding(
@@ -347,8 +384,9 @@ private fun UpdateRow(
             entry.updatable && entry.isSelf ->
                 // Updating the marketplace closes it. Saying so up front is
                 // better than the app appearing to crash mid-update.
-                "v${versionOf(entry.installedVersionCode)} → v${entry.app.version} · closes Market"
-            entry.updatable -> "v${versionOf(entry.installedVersionCode)} → v${entry.app.version}"
+                "build ${entry.installedVersionCode} → v${entry.app.version} · closes Market"
+            entry.updatable ->
+                "build ${entry.installedVersionCode} → v${entry.app.version}"
             else -> "v${entry.app.version}"
         }
         Text(
@@ -360,13 +398,6 @@ private fun UpdateRow(
         )
     }
 }
-
-/**
- * The installed versionCode is a run number, not a version name, and the phone
- * has no record of the name that shipped with it. Rendering the raw code is
- * more honest than inventing a plausible-looking string.
- */
-private fun versionOf(code: Long): String = code.toString()
 
 @Composable
 fun DetailScreen(
