@@ -391,22 +391,6 @@ fun AppRow(app: App, installedVersionCode: Long?, onClick: () -> Unit) {
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
-        // Uninstalling was only possible from LightOS's own settings, which is
-        // several screens away and not somewhere anyone thinks to look from a
-        // list of installed apps. Sits under the row rather than beside the
-        // name: it is the least likely thing you came here to do, and putting a
-        // destructive action next to the one you tap constantly is how it gets
-        // tapped by accident. Not offered for BrightMarket itself, which cannot
-        // uninstall the process asking.
-        if (!entry.isSelf && progress == null) {
-            Spacer(Modifier.height(gridUnits(0.2f)))
-            Text(
-                "UNINSTALL",
-                style = MaterialTheme.typography.labelSmall,
-                color = Light.ContentSecondary,
-                modifier = Modifier.lightClickable { onUninstall(entry) },
-            )
-        }
     }
 }
 
@@ -671,6 +655,22 @@ private fun UpdateRow(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
+        // Uninstalling was only possible from LightOS's own settings, which is
+        // several screens away and not somewhere anyone thinks to look from a
+        // list of installed apps. Sits under the row rather than beside the
+        // name: it is the least likely thing you came here to do, and putting a
+        // destructive action next to the one you tap constantly is how it gets
+        // tapped by accident. Not offered for BrightMarket itself, which cannot
+        // uninstall the process asking.
+        if (!entry.isSelf && progress == null) {
+            Spacer(Modifier.height(gridUnits(0.2f)))
+            Text(
+                "UNINSTALL",
+                style = MaterialTheme.typography.labelSmall,
+                color = Light.ContentSecondary,
+                modifier = Modifier.lightClickable { onUninstall(entry) },
+            )
+        }
     }
 }
 
