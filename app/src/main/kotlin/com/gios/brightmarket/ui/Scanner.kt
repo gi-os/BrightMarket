@@ -67,7 +67,7 @@ private class QrAnalyzer(private val onResult: (String) -> Unit) : ImageAnalysis
  * for updates like anything else.
  */
 @Composable
-fun ScanScreen(onScanned: (String) -> Unit) {
+fun ScanScreen(onScanned: (String) -> Unit, onCancel: () -> Unit) {
     val context = LocalContext.current
     var granted by remember {
         mutableStateOf(
@@ -108,7 +108,25 @@ fun ScanScreen(onScanned: (String) -> Unit) {
             return@Column
         }
 
-        CameraPreview(onScanned)
+        // weight, not fillMaxSize: fillMaxSize asks for the whole screen height
+        // even though the bar above has already taken some of it, so the preview
+        // ran off the bottom and pushed everything with it.
+        Box(Modifier.fillMaxWidth().weight(1f)) {
+            CameraPreview(onScanned)
+        }
+
+        // A second way out, below the preview, because the first one is a small
+        // arrow at the top of a screen filled by a camera. Belt and braces on
+        // purpose: being unable to leave a viewfinder is the worst failure this
+        // screen has, and it is not worth being clever about.
+        Text(
+            "CANCEL",
+            style = MaterialTheme.typography.labelLarge,
+            color = Light.Content,
+            modifier = Modifier
+                .lightClickable(onClick = onCancel)
+                .padding(horizontal = gridUnits(Grid.INSET), vertical = gridUnits(0.8f)),
+        )
     }
 }
 
@@ -124,7 +142,15 @@ private fun CameraPreview(onScanned: (String) -> Unit) {
     AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = { ctx ->
-            val previewView = PreviewView(ctx)
+            val previewView = PreviewView(ctx).apply {
+                // COMPATIBLE is a TextureView. The default, PERFORMANCE, is a
+                // SurfaceView composited in its own layer, which on some devices
+                // draws over everything around it -- including the top bar with
+                // the only way off this screen. Slightly more expensive and
+                // correct, which is the right trade for a viewfinder that is on
+                // screen for a few seconds.
+                implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+            }
             val future = ProcessCameraProvider.getInstance(ctx)
             future.addListener({
                 val provider = future.get()

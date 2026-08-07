@@ -9,6 +9,7 @@ import androidx.core.content.ContextCompat
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -201,6 +202,9 @@ class MainActivity : ComponentActivity() {
                 }
 
                 if (adding) {
+                    // Same reasoning as the scanner, minus the urgency: a top
+                    // bar is the only way off, and the gesture should work.
+                    BackHandler { adding = false }
                     Column(Modifier.fillMaxSize().background(Light.Background)) {
                         TopBar("ADD AN APP", onBack = { adding = false })
                         AddScreen(
@@ -215,19 +219,23 @@ class MainActivity : ComponentActivity() {
                 }
 
                 if (scanning) {
-                    // Full screen: a viewfinder squeezed under the chrome is
-                    // harder to aim, and there is nothing else to do here.
-                    androidx.compose.foundation.layout.Box(
+                    // The system gesture has to work here. Without it the only
+                    // exits were a small arrow at the top of a screen filled by
+                    // a camera and, on this device, one the camera surface was
+                    // drawing over -- so there was no way off at all.
+                    BackHandler { scanning = false }
+                    Column(
                         Modifier.fillMaxSize().background(Light.Background)
                     ) {
-                        Column(Modifier.fillMaxSize()) {
-                            TopBar("SCAN", onBack = { scanning = false })
-                            ScanScreen { text ->
+                        TopBar("SCAN", onBack = { scanning = false })
+                        ScanScreen(
+                            onScanned = { text ->
                                 scanning = false
                                 adding = false
                                 onScanned(text)
-                            }
-                        }
+                            },
+                            onCancel = { scanning = false },
+                        )
                     }
                     return@BrightMarketTheme
                 }
