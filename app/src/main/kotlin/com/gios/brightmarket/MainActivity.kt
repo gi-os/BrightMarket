@@ -1,6 +1,9 @@
 package com.gios.brightmarket
 
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -49,6 +52,22 @@ class MainActivity : ComponentActivity() {
      * shared field would make every row show whichever reported last.
      */
     private var progressFor by mutableStateOf<Map<String, Installer.Progress>>(emptyMap())
+
+    /**
+     * Fires when a package is added or replaced anywhere on the phone.
+     *
+     * onResume alone was not enough. Returning from the system installer dialog
+     * resumes this activity, but the install itself finishes a moment later, so
+     * the package manager still reported the app as absent and it never moved
+     * into the installed section. This is the authoritative signal, and it also
+     * catches installs that complete while the app is in the foreground.
+     */
+    private val packageWatcher = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            refreshInstalled()
+            refreshTracked()
+        }
+    }
 
     /** A package named by a QR link, opened once the index has loaded. */
     private var pendingPkg: String? = null
@@ -269,9 +288,26 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        registerReceiver(
+            packageWatcher,
+            IntentFilter().apply {
+                addAction(Intent.ACTION_PACKAGE_ADDED)
+                addAction(Intent.ACTION_PACKAGE_REPLACED)
+                addAction(Intent.ACTION_PACKAGE_REMOVED)
+                // Without the data scheme these actions are never delivered:
+                // package broadcasts carry a package: URI and a filter with no
+                // scheme matches none of them.
+                addDataScheme("package")
+            },
+        )
         // Coming back from the system installer dialog is exactly when installed
         // versions change, and what moves a row out of "needs update".
         refreshInstalled()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        runCatching { unregisterReceiver(packageWatcher) }
     }
 
     /**
@@ -420,7 +456,13 @@ class MainActivity : ComponentActivity() {
                 expectedSha256 = app.sha256,
                 pkg = app.pkg,
                 onProgress = { progress = it },
-            ).onSuccess { progress = null }
+            ).onSuccess {
+                progress = null
+                // The broadcast is the reliable signal, but the session can also
+                // complete without one on some builds; re-reading here costs a
+                // package-manager query and closes that gap.
+                refreshInstalled()
+            }
         }
     }
 

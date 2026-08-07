@@ -4,6 +4,15 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.5
+
+**Installed apps now actually move into the installed section.** Returning from
+the system installer dialog resumes the app, but the install finishes a moment
+after that — so the phone still reported the app as absent and the list never
+updated. BrightMarket now listens for the package event itself, which is the
+authoritative signal and also catches installs that finish while it is in the
+foreground.
+
 ## v1.4
 
 **Imported apps show up whether or not they're installed.** An Obtainium
