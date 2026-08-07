@@ -132,6 +132,18 @@ opaque `Failure: Invalid` and nothing else. Exactly one APK is attached per rele
 > change, so this once you have to uninstall and reinstall. Nothing is lost except
 > BrightMarket's own settings — the apps you installed with it are untouched.
 
+## Nightly builds
+
+A push to this repo publishes a **nightly**, marked as a prerelease. The
+catalogue skips prereleases, so a nightly is only ever offered to someone who
+has asked for one in Settings → Updates. Official releases are cut deliberately
+— `[release]` in a commit message, or running the workflow by hand.
+
+A nightly is verified exactly as hard as a release: the index downloads it,
+hashes it, and reads its versionCode out of the APK. It's only offered when it's
+actually ahead of stable, so an official release cut after the last nightly
+moves everyone forward rather than stranding the people who opted in.
+
 ## Reporting a bug
 
 Shake the phone. It files an issue with a screenshot and the recent log, so you don't
