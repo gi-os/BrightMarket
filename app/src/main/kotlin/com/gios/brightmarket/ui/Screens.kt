@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import com.gios.brightmarket.data.App
+import com.gios.brightmarket.data.Installed
 import com.gios.brightmarket.data.Sort
 import com.gios.brightmarket.install.Installer
 
@@ -177,7 +178,6 @@ fun ListScreen(
     onImport: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize().background(Light.Background)) {
-        TopBar("BRIGHTMARKET")
         SearchField(query, onQuery)
         if (categories.size > 1) CategoryRow(categories, category, onCategory)
         SortRow(sort, onSort)
@@ -216,6 +216,152 @@ private fun Message(text: String) {
         Text(text, color = Light.ContentSecondary)
     }
 }
+
+enum class Tab(val label: String) { BROWSE("Browse"), UPDATES("Updates") }
+
+/**
+ * LightBottomBar is LightOS's ActionBar: at most 5 icon items, but at most 3 if
+ * any item is text. Two text destinations sits comfortably inside that.
+ */
+@Composable
+fun TabBar(current: Tab, updateCount: Int, onSelect: (Tab) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(gridUnits(4f))
+            .padding(horizontal = gridUnits(1f)),
+        horizontalArrangement = Arrangement.spacedBy(gridUnits(2f)),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Tab.entries.forEach { tab ->
+            val selected = tab == current
+            // The count belongs on the label, not in a coloured badge -- there
+            // is no accent colour in the palette to spend on one.
+            val text = if (tab == Tab.UPDATES && updateCount > 0) {
+                "${tab.label} ($updateCount)"
+            } else {
+                tab.label
+            }
+            Text(
+                text = text.uppercase(),
+                style = androidx.compose.material3.MaterialTheme.typography.labelLarge,
+                color = if (selected) Light.Content else Light.ContentSecondary,
+                modifier = Modifier.lightClickable { onSelect(tab) },
+            )
+        }
+    }
+}
+
+@Composable
+fun UpdatesScreen(
+    updates: List<Installed>,
+    upToDate: List<Installed>,
+    progressFor: Map<String, Installer.Progress>,
+    loading: Boolean,
+    onUpdateAll: () -> Unit,
+    onOpen: (App) -> Unit,
+) {
+    LazyColumn(Modifier.fillMaxSize()) {
+        if (updates.isEmpty() && upToDate.isEmpty()) {
+            item {
+                Box(
+                    Modifier.fillMaxWidth().padding(gridUnits(2f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        if (loading) "Loading…"
+                        // Distinguish "nothing to update" from "you have none of
+                        // these apps" -- they need different next steps.
+                        else "None of these apps are installed yet.",
+                        color = Light.ContentSecondary,
+                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+            return@LazyColumn
+        }
+
+        if (updates.isNotEmpty()) {
+            item {
+                Text(
+                    "UPDATE ALL (${updates.size})",
+                    style = androidx.compose.material3.MaterialTheme.typography.labelLarge,
+                    color = Light.Content,
+                    modifier = Modifier
+                        .lightClickable(
+                            // Disabled while anything is mid-install: a second
+                            // pass would re-download what's already going.
+                            enabled = progressFor.isEmpty(),
+                            onClick = onUpdateAll,
+                        )
+                        .padding(horizontal = gridUnits(1f), vertical = gridUnits(1f)),
+                )
+            }
+            items(updates, key = { it.app.pkg }) { entry ->
+                UpdateRow(entry, progressFor[entry.app.pkg]) { onOpen(entry.app) }
+            }
+        }
+
+        if (upToDate.isNotEmpty()) {
+            item {
+                Text(
+                    "UP TO DATE",
+                    style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                    color = Light.ContentSecondary,
+                    modifier = Modifier.padding(
+                        horizontal = gridUnits(1f),
+                        vertical = gridUnits(1f),
+                    ),
+                )
+            }
+            items(upToDate, key = { it.app.pkg }) { entry ->
+                UpdateRow(entry, progressFor[entry.app.pkg]) { onOpen(entry.app) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UpdateRow(
+    entry: Installed,
+    progress: Installer.Progress?,
+    onClick: () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .lightClickable(onClick = onClick)
+            .padding(horizontal = gridUnits(1f), vertical = gridUnits(0.8f))
+    ) {
+        Text(entry.app.name, style = androidx.compose.material3.MaterialTheme.typography.bodyLarge)
+        val detail = when {
+            progress is Installer.Progress.Downloading && progress.total > 0 ->
+                "Downloading ${progress.bytes * 100 / progress.total}%"
+            progress is Installer.Progress.Downloading -> "Downloading…"
+            progress is Installer.Progress.Verifying -> "Verifying…"
+            progress is Installer.Progress.AwaitingConfirmation -> "Confirm the install…"
+            progress is Installer.Progress.Failed -> progress.reason
+            // Show both sides of the comparison: "1.2.10 → 1.3.19" says why the
+            // row is here far better than the word "Update" does.
+            entry.updatable -> "v${versionOf(entry.installedVersionCode)} → v${entry.app.version}"
+            else -> "v${entry.app.version}"
+        }
+        Text(
+            detail,
+            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+            color = Light.ContentSecondary,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/**
+ * The installed versionCode is a run number, not a version name, and the phone
+ * has no record of the name that shipped with it. Rendering the raw code is
+ * more honest than inventing a plausible-looking string.
+ */
+private fun versionOf(code: Long): String = code.toString()
 
 @Composable
 fun DetailScreen(

@@ -1,13 +1,15 @@
 package com.gios.brightmarket
 
-import android.app.Activity
-import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import com.gios.brightmarket.data.App
 import com.gios.brightmarket.data.Index
@@ -16,7 +18,12 @@ import com.gios.brightmarket.data.Sort
 import com.gios.brightmarket.install.Installer
 import com.gios.brightmarket.ui.BrightMarketTheme
 import com.gios.brightmarket.ui.DetailScreen
+import com.gios.brightmarket.ui.Light
 import com.gios.brightmarket.ui.ListScreen
+import com.gios.brightmarket.ui.Tab
+import com.gios.brightmarket.ui.TabBar
+import com.gios.brightmarket.ui.TopBar
+import com.gios.brightmarket.ui.UpdatesScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -28,10 +35,20 @@ class MainActivity : ComponentActivity() {
     private var error by mutableStateOf<String?>(null)
     private var sort by mutableStateOf(Sort.UPDATED)
     private var selected by mutableStateOf<App?>(null)
+    private var tab by mutableStateOf(Tab.BROWSE)
     private var query by mutableStateOf("")
     private var category by mutableStateOf(Index.ALL)
-    private var progress by mutableStateOf<Installer.Progress?>(null)
     private var installed by mutableStateOf<Map<String, Long>>(emptyMap())
+
+    /** Progress for the app open on the detail screen. */
+    private var progress by mutableStateOf<Installer.Progress?>(null)
+
+    /**
+     * Progress keyed by package, for the Updates tab. "Update all" runs several
+     * installs in sequence, and one shared field would make every row display
+     * whichever install reported last.
+     */
+    private var progressFor by mutableStateOf<Map<String, Installer.Progress>>(emptyMap())
 
     /** Obtainium exports are picked with SAF -- no storage permission needed. */
     private val pickExport = registerForActivityResult(
@@ -69,25 +86,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             BrightMarketTheme {
                 val app = selected
-                if (app == null) {
-                    ListScreen(
-                        // Filter first, then sort: sorting the whole index and
-                        // then filtering would do the expensive half twice.
-                        apps = Index.sort(Index.filter(apps, query, category), sort),
-                        sort = sort,
-                        query = query,
-                        category = category,
-                        categories = Index.categories(apps),
-                        installed = installed,
-                        loading = loading,
-                        error = error,
-                        onQuery = { query = it },
-                        onCategory = { category = it },
-                        onSort = { sort = it },
-                        onOpen = { selected = it; progress = null },
-                        onImport = { pickExport.launch(arrayOf("application/json", "text/plain", "*/*")) },
-                    )
-                } else {
+                val (updates, upToDate) = Index.partitionInstalled(apps, installed)
+
+                if (app != null) {
                     DetailScreen(
                         app = app,
                         installedVersionCode = installed[app.pkg],
@@ -95,6 +96,46 @@ class MainActivity : ComponentActivity() {
                         onInstall = { install(app) },
                         onBack = { selected = null },
                     )
+                    return@BrightMarketTheme
+                }
+
+                Column(Modifier.fillMaxSize().background(Light.Background)) {
+                    TopBar("BRIGHTMARKET")
+                    TabBar(tab, updates.size) { tab = it }
+
+                    when (tab) {
+                        Tab.BROWSE -> ListScreen(
+                            // Filter first, then sort: sorting the whole index
+                            // and then filtering would do the expensive half
+                            // twice.
+                            apps = Index.sort(Index.filter(apps, query, category), sort),
+                            sort = sort,
+                            query = query,
+                            category = category,
+                            categories = Index.categories(apps),
+                            installed = installed,
+                            loading = loading,
+                            error = error,
+                            onQuery = { query = it },
+                            onCategory = { category = it },
+                            onSort = { sort = it },
+                            onOpen = { selected = it; progress = null },
+                            onImport = {
+                                pickExport.launch(
+                                    arrayOf("application/json", "text/plain", "*/*")
+                                )
+                            },
+                        )
+
+                        Tab.UPDATES -> UpdatesScreen(
+                            updates = updates,
+                            upToDate = upToDate,
+                            progressFor = progressFor,
+                            loading = loading,
+                            onUpdateAll = { updateAll(updates.map { it.app }) },
+                            onOpen = { selected = it; progress = null },
+                        )
+                    }
                 }
             }
         }
@@ -104,7 +145,8 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         // Re-read installed versions on every resume: coming back from the
-        // system installer dialog is exactly when they change.
+        // system installer dialog is exactly when they change, and it is what
+        // moves a row from "update" to "up to date".
         refreshInstalled()
     }
 
@@ -134,6 +176,34 @@ class MainActivity : ComponentActivity() {
                 pkg = app.pkg,
                 onProgress = { progress = it },
             ).onSuccess { progress = null }
+        }
+    }
+
+    /**
+     * Update several apps one at a time.
+     *
+     * Deliberately sequential. Each install ends in the system's confirmation
+     * dialog, and firing them in parallel would stack those dialogs on top of
+     * each other -- the user would tap through a pile of prompts with no idea
+     * which app each one belongs to. It also keeps only one download on the
+     * wire, which matters on the LP3's connection.
+     */
+    private fun updateAll(targets: List<App>) {
+        lifecycleScope.launch {
+            for (app in targets) {
+                Installer.install(
+                    ctx = this@MainActivity,
+                    apkUrl = app.apkUrl,
+                    expectedSha256 = app.sha256,
+                    pkg = app.pkg,
+                    onProgress = { p -> progressFor = progressFor + (app.pkg to p) },
+                )
+                // Clear this app's indicator whatever happened. A failure is
+                // already reported by the installer's own broadcast, and leaving
+                // a stale "Downloading 100%" on the row is worse than nothing.
+                progressFor = progressFor - app.pkg
+            }
+            refreshInstalled()
         }
     }
 

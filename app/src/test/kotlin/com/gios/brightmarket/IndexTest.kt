@@ -158,4 +158,43 @@ class IndexTest {
         assertEquals(1, apps.size)
         assertEquals(0, apps.first().screenshots.size)
     }
+
+    @Test fun `partition splits updatable from up to date`() {
+        val apps = Index.parse(sample)   // BrightTip vc=18, BrightNoise vc=9
+        val (updates, current) = Index.partitionInstalled(
+            apps,
+            mapOf("com.gios.lighttip" to 17L, "com.gios.lightnoise" to 9L),
+        )
+        assertEquals(listOf("BrightTip"), updates.map { it.app.name })
+        assertEquals(listOf("BrightNoise"), current.map { it.app.name })
+    }
+
+    @Test fun `apps that are not installed appear in neither list`() {
+        val apps = Index.parse(sample)
+        val (updates, current) = Index.partitionInstalled(apps, emptyMap())
+        assertEquals(0, updates.size)
+        assertEquals(0, current.size)
+    }
+
+    @Test fun `a newer installed build is not offered as an update`() {
+        // Sideloading a debug build gives a higher versionCode than the index.
+        // That must read as up-to-date, not as a downgrade offer -- Android
+        // would refuse the install anyway.
+        val apps = Index.parse(sample)
+        val (updates, current) = Index.partitionInstalled(
+            apps, mapOf("com.gios.lighttip" to 999L)
+        )
+        assertEquals(0, updates.size)
+        assertEquals(1, current.size)
+    }
+
+    @Test fun `comparison uses versionCode, not the version name`() {
+        // BrightTip is versionName "1.3.18", versionCode 18. An installed code
+        // of 9 is OLDER, even though the string "1.1.9" > "1.3.18" is false and
+        // naive string comparison of names gets this backwards.
+        val apps = Index.parse(sample)
+        val (updates, _) = Index.partitionInstalled(apps, mapOf("com.gios.lighttip" to 9L))
+        assertEquals(1, updates.size)
+        assertTrue(updates.first().updatable)
+    }
 }

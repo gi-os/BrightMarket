@@ -44,7 +44,42 @@ enum class Sort(val label: String) {
     POPULAR("Popular"),
 }
 
+/**
+ * What the Updates tab needs to know about one installed app.
+ *
+ * `installedVersionCode` is null only for apps in the index that aren't on the
+ * phone -- those never appear here.
+ */
+data class Installed(
+    val app: App,
+    val installedVersionCode: Long,
+) {
+    val updatable: Boolean get() = app.versionCode > installedVersionCode
+}
+
 object Index {
+
+    /**
+     * Split the index into "has an update" and "up to date", given what the
+     * package manager reports.
+     *
+     * Comparison is on versionCode, never the version *name*. Names are
+     * marketing strings -- "1.10.0" sorts before "1.9.0" as text -- while every
+     * Bright app's CI stamps versionCode from its monotonic run number. Getting
+     * this wrong reads to the user as "no update available", forever, silently.
+     */
+    fun partitionInstalled(
+        apps: List<App>,
+        installed: Map<String, Long>,
+    ): Pair<List<Installed>, List<Installed>> {
+        val present = apps.mapNotNull { app ->
+            installed[app.pkg]?.let { Installed(app, it) }
+        }
+        val (updates, current) = present.partition { it.updatable }
+        return updates.sortedByDescending { it.app.publishedAt } to
+            current.sortedBy { it.app.name.lowercase() }
+    }
+
 
     fun parse(json: String): List<App> {
         val root = JSONObject(json)
