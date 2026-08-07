@@ -30,6 +30,12 @@ data class App(
     val notes: String,
     val downloads: Int,
     val firstSeen: String,
+    /**
+     * Raw URLs into the app's own repo, in the order the developer named the
+     * files. Empty for most apps -- the UI must treat that as normal, not as a
+     * loading state.
+     */
+    val screenshots: List<String> = emptyList(),
 )
 
 enum class Sort(val label: String) {
@@ -61,6 +67,11 @@ object Index {
                 notes = latest.optString("notes", ""),
                 downloads = o.optInt("downloads", 0),
                 firstSeen = o.optString("firstSeen", ""),
+                screenshots = o.optJSONArray("screenshots")?.let { arr ->
+                    (0 until arr.length()).mapNotNull { j ->
+                        arr.optJSONObject(j)?.optString("url")?.takeIf { it.isNotBlank() }
+                    }
+                } ?: emptyList(),
             )
         }
     }

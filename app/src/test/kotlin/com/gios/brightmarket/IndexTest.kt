@@ -22,6 +22,8 @@ class IndexTest {
        "latest":{"version":"1.3.18","versionCode":18,
                  "apk":"https://example/LightTip-v1.3.18.apk","size":4250807,
                  "sha256":"abc","published":"2026-08-05T23:25:49Z","notes":"n"},
+       "screenshots":[{"url":"https://raw.example/a.png","name":"a.png","size":1},
+                      {"url":"https://raw.example/b.png","name":"b.png","size":2}],
        "downloads":16,"firstSeen":"2026-01-02"},
       {"pkg":"com.gios.lightnoise","name":"BrightNoise","repo":"gi-os/BrightNoise",
        "category":"media","summary":"White noise.",
@@ -131,5 +133,29 @@ class IndexTest {
     @Test fun `filtering an empty index is safe`() {
         assertEquals(0, Index.filter(emptyList(), "anything").size)
         assertEquals(listOf(Index.ALL), Index.categories(emptyList()))
+    }
+
+    @Test fun `screenshots parse in order, and absent means empty not null`() {
+        val apps = Index.parse(sample)
+        val tip = apps.first { it.name == "BrightTip" }
+        assertEquals(listOf("https://raw.example/a.png", "https://raw.example/b.png"), tip.screenshots)
+
+        // BrightNoise has no screenshots key at all. Most apps won't, so this
+        // has to be an empty list rather than a null the UI must guard.
+        val noise = apps.first { it.name == "BrightNoise" }
+        assertEquals(0, noise.screenshots.size)
+    }
+
+    @Test fun `an index with no screenshots key anywhere still parses`() {
+        // The pre-screenshots index format must keep loading, or an app update
+        // that lands before the index rebuild shows an empty store.
+        val old = """{"format":1,"apps":[{"pkg":"a.b.c","name":"X","repo":"o/r",
+          "category":"utilities","summary":"s",
+          "latest":{"version":"1.0.0","versionCode":1,"apk":"u","size":1,
+                    "sha256":"h","published":"2026-01-01T00:00:00Z","notes":""},
+          "downloads":0,"firstSeen":"2026-01-01"}]}"""
+        val apps = Index.parse(old)
+        assertEquals(1, apps.size)
+        assertEquals(0, apps.first().screenshots.size)
     }
 }

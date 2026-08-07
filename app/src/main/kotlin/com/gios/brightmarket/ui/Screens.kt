@@ -231,9 +231,18 @@ fun DetailScreen(
             .background(Light.Background)
             .verticalScroll(rememberScrollState())
     ) {
-        TopBar(app.name.uppercase())
+        TopBar("BRIGHTMARKET")
 
         Column(Modifier.padding(horizontal = gridUnits(1f))) {
+            // The bar's title is set in `fine` and reads as chrome. The product
+            // itself needs a real heading, or the page opens with a description
+            // and no indication of what it describes.
+            Text(
+                app.name,
+                style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
+            )
+            Spacer(Modifier.height(gridUnits(0.5f)))
+
             Text(app.summary, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
 
             Spacer(Modifier.height(gridUnits(1f)))
@@ -242,6 +251,11 @@ fun DetailScreen(
                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
                 color = Light.ContentSecondary,
             )
+
+            if (app.screenshots.isNotEmpty()) {
+                Spacer(Modifier.height(gridUnits(1.2f)))
+                ScreenshotStrip(app.screenshots)
+            }
 
             Spacer(Modifier.height(gridUnits(1.5f)))
 
