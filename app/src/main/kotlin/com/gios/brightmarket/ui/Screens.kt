@@ -34,7 +34,13 @@ import com.gios.brightmarket.install.Installer
  * bars are separated from content by space, never by a divider line.
  */
 @Composable
-fun TopBar(title: String, onBack: (() -> Unit)? = null, onScan: (() -> Unit)? = null) {
+fun TopBar(
+    title: String,
+    onBack: (() -> Unit)? = null,
+    onScan: (() -> Unit)? = null,
+    onRefresh: (() -> Unit)? = null,
+    refreshing: Boolean = false,
+) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -43,23 +49,24 @@ fun TopBar(title: String, onBack: (() -> Unit)? = null, onScan: (() -> Unit)? = 
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (onBack != null) {
-            Text(
-                "<",
-                style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier
+            Box(
+                Modifier
                     .lightClickable(onClick = onBack)
-                    .padding(end = gridUnits(0.6f)),
-            )
+                    .padding(end = gridUnits(0.4f)),
+            ) { IconBack(Light.Content) }
         }
         Text(title, style = MaterialTheme.typography.labelMedium)
-        if (onScan != null) {
+        if (onScan != null || onRefresh != null) {
             Spacer(Modifier.weight(1f))
-            Text(
-                "SCAN",
-                style = MaterialTheme.typography.labelMedium,
-                color = Light.ContentSecondary,
-                modifier = Modifier.lightClickable(onClick = onScan),
-            )
+            if (onRefresh != null) {
+                Box(Modifier.lightClickable(onClick = onRefresh)) {
+                    IconRefresh(if (refreshing) Light.ContentSecondary else Light.Content)
+                }
+                Spacer(Modifier.width(gridUnits(1f)))
+            }
+            if (onScan != null) {
+                Box(Modifier.lightClickable(onClick = onScan)) { IconScan(Light.Content) }
+            }
         }
     }
 }
@@ -71,6 +78,8 @@ fun TopBar(title: String, onBack: (() -> Unit)? = null, onScan: (() -> Unit)? = 
  */
 @Composable
 fun BottomBar(items: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+    // Icons, so the bar isn't capped at three: the SDK allows five icon items
+    // but only three when any of them is text.
     Row(
         Modifier
             .fillMaxWidth()
@@ -85,12 +94,12 @@ fun BottomBar(items: List<String>, selected: Int, onSelect: (Int) -> Unit) {
                     .lightClickable { onSelect(i) },
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    label.uppercase(),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = if (i == selected) Light.Content else Light.ContentSecondary,
-                    maxLines = 1,
-                )
+                val tint = if (i == selected) Light.Content else Light.ContentSecondary
+                when (label) {
+                    "Browse" -> IconBrowse(tint)
+                    "Updates" -> IconUpdates(tint)
+                    else -> IconSettings(tint)
+                }
             }
         }
     }
@@ -205,10 +214,8 @@ private fun Choice(title: String, body: String, onClick: () -> Unit) {
 @Composable
 fun SettingsScreen(
     focusEnabled: Boolean,
-    confirmingFocusOff: Boolean,
     onToggleFocus: () -> Unit,
-    onConfirmFocusOff: () -> Unit,
-    onCancelFocusOff: () -> Unit,
+    onScan: () -> Unit,
     onImport: () -> Unit,
 ) {
     Column(
@@ -225,39 +232,44 @@ fun SettingsScreen(
             if (focusEnabled) {
                 "On. Browsing is off. Apps arrive by QR from the desktop."
             } else {
-                "Off. You can browse and search on the phone."
+                "Off. You can browse and search on the phone. " +
+                    "Turning it on can only be undone with the QR code."
             },
             style = MaterialTheme.typography.bodySmall,
             color = Light.ContentSecondary,
         )
         Spacer(Modifier.height(gridUnits(0.6f)))
 
-        if (confirmingFocusOff) {
-            // Leaving focus mode is the direction that needs a pause. Turning it
-            // ON is instant -- friction there would only discourage the choice
-            // the feature exists to support.
+        if (focusEnabled) {
+            // No off switch here. Focus mode is only lifted by scanning the QR
+            // from the desktop catalogue, which is the whole point: the thing
+            // you'd have to go and find is a different screen in a different
+            // room, and that pause is the feature.
+            //
+            // Worth being straight about what this is: a commitment device, not
+            // a security boundary. The link is a plain brightmarket://focus/off
+            // and anyone determined can construct one. It makes the easy path
+            // the intentional one; it does not stop the device's owner, and
+            // pretending otherwise would invite someone to rely on it.
             Text(
-                "Turn browsing back on?",
-                style = MaterialTheme.typography.bodyLarge,
+                "To turn this off, scan the OFF code at",
+                style = MaterialTheme.typography.bodySmall,
+                color = Light.ContentSecondary,
             )
-            Spacer(Modifier.height(gridUnits(0.4f)))
-            Row {
-                Text(
-                    "YES, TURN OFF",
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.lightClickable(onClick = onConfirmFocusOff),
-                )
-                Spacer(Modifier.width(gridUnits(1.5f)))
-                Text(
-                    "CANCEL",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Light.ContentSecondary,
-                    modifier = Modifier.lightClickable(onClick = onCancelFocusOff),
-                )
-            }
+            Spacer(Modifier.height(gridUnits(0.2f)))
+            Text(
+                "gi-os.github.io/brightmarket-index/browse.html",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(Modifier.height(gridUnits(0.6f)))
+            Text(
+                "SCAN",
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.lightClickable(onClick = onScan),
+            )
         } else {
             Text(
-                if (focusEnabled) "TURN OFF" else "TURN ON",
+                "TURN ON",
                 style = MaterialTheme.typography.labelLarge,
                 modifier = Modifier.lightClickable(onClick = onToggleFocus),
             )
@@ -604,7 +616,7 @@ fun DetailScreen(
         TopBar(app.name.uppercase(), onBack = onBack)
 
         Column(Modifier.padding(horizontal = gridUnits(Grid.INSET))) {
-            Text(app.summary, style = MaterialTheme.typography.bodyMedium)
+            MarkdownText(app.summary, style = MaterialTheme.typography.bodyMedium)
 
             Spacer(Modifier.height(gridUnits(0.8f)))
             Text(
@@ -679,7 +691,7 @@ fun DetailScreen(
                     color = Light.ContentSecondary,
                 )
                 Spacer(Modifier.height(gridUnits(0.4f)))
-                Text(app.notes, style = MaterialTheme.typography.bodySmall)
+                MarkdownText(app.notes, style = MaterialTheme.typography.bodySmall)
             }
 
             Spacer(Modifier.height(gridUnits(2f)))

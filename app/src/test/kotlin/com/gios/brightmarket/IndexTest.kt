@@ -265,3 +265,52 @@ class IndexTest {
         )
     }
 }
+
+class MarkdownTest {
+
+    @Test fun `bold, italic, code and links are recognised`() {
+        val spans = com.gios.brightmarket.data.Markdown.inline(
+            "a **b** and *i* and `c` and [t](https://x.y)"
+        )
+        assertEquals("b", spans.first { it.style.name == "BOLD" }.text)
+        assertEquals("i", spans.first { it.style.name == "ITALIC" }.text)
+        assertEquals("c", spans.first { it.style.name == "CODE" }.text)
+        val link = spans.first { it.style.name == "LINK" }
+        assertEquals("t", link.text)
+        assertEquals("https://x.y", link.href)
+    }
+
+    @Test fun `bold is not read as two italics`() {
+        // ** has to be tried before *, or every bold run renders as emphasis
+        // around an empty string.
+        val spans = com.gios.brightmarket.data.Markdown.inline("**Full Changelog**: x")
+        assertEquals("BOLD", spans.first().style.name)
+        assertEquals("Full Changelog", spans.first().text)
+    }
+
+    @Test fun `unmatched marks are left alone rather than eaten`() {
+        val spans = com.gios.brightmarket.data.Markdown.inline("trailing ** unmatched")
+        assertEquals(1, spans.size)
+        assertEquals("trailing ** unmatched", spans.first().text)
+    }
+
+    @Test fun `headings and bullets are detected`() {
+        val lines = com.gios.brightmarket.data.Markdown.parse("## Title\n- one\n- two")
+        assertEquals(2, lines[0].heading)
+        assertEquals("Title", lines[0].spans.first().text)
+        assertTrue(lines[1].bullet)
+        assertEquals("one", lines[1].spans.first().text)
+    }
+
+    @Test fun `plain strips the marks`() {
+        assertEquals(
+            "Full Changelog: see here",
+            com.gios.brightmarket.data.Markdown.plain("**Full Changelog**: [see here](https://x.y)")
+        )
+    }
+
+    @Test fun `empty input doesn't blow up`() {
+        assertEquals(1, com.gios.brightmarket.data.Markdown.inline("").size)
+        assertEquals("", com.gios.brightmarket.data.Markdown.plain(""))
+    }
+}

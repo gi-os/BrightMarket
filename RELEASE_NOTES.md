@@ -4,6 +4,35 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.2
+
+**Refresh.** A refresh control in the top bar, which refetches the catalogue
+*and* re-checks every tracked repo. Those are two halves of one question — "is
+anything newer" — and refreshing only one would leave a stale answer on screen.
+
+**Icons.** The bottom bar is icons now, drawn rather than shipped as assets.
+That also lifts a real constraint: LightBottomBar allows five icon items but
+only three when any of them is text.
+
+**Markdown in descriptions and release notes.** Every app's notes contain
+markdown — today all twenty include at least `**Full Changelog**` — and shown as
+plain text those asterisks appear literally, which reads as a bug. Bold, italic,
+code, links, headings and bullets now render. It is deliberately a small reader
+rather than a library: a full parser is a dependency, and this is two screens of
+text on a phone with very little storage.
+
+**Focus mode is stricter.** With it on, the phone shows Updates and Settings
+only — the separate "Installed" tab was rendering the same screen as Updates, so
+it was a duplicate of itself. Focus mode can no longer be switched off in
+Settings; the only way back is scanning the OFF code on the desktop catalogue,
+which is now large and alone at the bottom of that page. Turning it *on* is
+still one tap in Settings.
+
+That is a commitment device, not a security boundary, and it is worth saying
+plainly: the code is an ordinary `brightmarket://focus/off` link and anyone
+determined can make one. It makes the easy path the intentional one. It does not
+stop the owner of the device.
+
 ## v1.1
 
 **Scan a QR to install.** The camera is in, carried over from LightQR — ZXing

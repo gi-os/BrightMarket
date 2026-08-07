@@ -38,7 +38,6 @@ class MainActivity : ComponentActivity() {
 
     private var onboarded by mutableStateOf(false)
     private var focusMode by mutableStateOf(false)
-    private var confirmingFocusOff by mutableStateOf(false)
 
     private var progress by mutableStateOf<Installer.Progress?>(null)
 
@@ -131,92 +130,75 @@ class MainActivity : ComponentActivity() {
                 // Three destinations, which is the SDK's hard ceiling for a
                 // bottom bar containing any text item.
                 val tabs = if (focusMode) {
-                    listOf("Installed", "Updates", "Settings")
+                    // No "Installed" tab: it rendered the same screen as Updates,
+                    // so it was a duplicate of itself sitting in a bar that only
+                    // allows three items.
+                    listOf("Updates", "Settings")
                 } else {
                     listOf("Browse", "Updates", "Settings")
                 }
                 val index = tabIndex.coerceIn(0, tabs.lastIndex)
 
                 Column(Modifier.fillMaxSize().background(Light.Background)) {
-                    TopBar("BRIGHTMARKET", onScan = { scanning = true })
+                    TopBar(
+                        "BRIGHTMARKET",
+                        onScan = { scanning = true },
+                        onRefresh = {
+                            if (!loading) {
+                                refresh()
+                                refreshTracked()
+                            }
+                        },
+                        refreshing = loading,
+                    )
 
                     Column(Modifier.weight(1f)) {
-                        when (index) {
-                            0 -> if (focusMode) {
-                                // Focus mode: only what is already on the phone.
-                                // No search, no categories, no way to encounter
-                                // an app you don't own.
-                                UpdatesScreen(
-                                    updates = updates,
-                                    upToDate = upToDate,
-                                    tracked = trackedRows,
-                                    progressFor = progressFor,
-                                    loading = loading,
-                                    focusMode = true,
-                                    onUpdateAll = { updateAll(updates.map { it.app }) },
-                                    onOpen = { selected = it; progress = null },
-                                    onInstallTracked = ::installTracked,
-                                    onForgetTracked = ::forgetTracked,
-                                )
-                            } else {
-                                BrowseScreen(
-                                    apps = Index.sort(Index.filter(apps, query, category), sort),
-                                    sort = sort,
-                                    query = query,
-                                    category = category,
-                                    categories = Index.categories(apps),
-                                    installed = installed,
-                                    loading = loading,
-                                    error = error,
-                                    onQuery = { query = it },
-                                    onCategory = { category = it },
-                                    onSort = { sort = it },
-                                    onOpen = { selected = it; progress = null },
-                                )
-                            }
+                        when (tabs[index]) {
+                        "Browse" -> BrowseScreen(
+                            apps = Index.sort(Index.filter(apps, query, category), sort),
+                            sort = sort,
+                            query = query,
+                            category = category,
+                            categories = Index.categories(apps),
+                            installed = installed,
+                            loading = loading,
+                            error = error,
+                            onQuery = { query = it },
+                            onCategory = { category = it },
+                            onSort = { sort = it },
+                            onOpen = { selected = it; progress = null },
+                        )
 
-                            1 -> UpdatesScreen(
-                                updates = updates,
-                                upToDate = upToDate,
-                                tracked = trackedRows,
-                                progressFor = progressFor,
-                                loading = loading,
-                                focusMode = focusMode,
-                                onUpdateAll = { updateAll(updates.map { it.app }) },
-                                onOpen = { selected = it; progress = null },
-                                onInstallTracked = ::installTracked,
-                                onForgetTracked = ::forgetTracked,
-                            )
+                        "Updates" -> UpdatesScreen(
+                            updates = updates,
+                            upToDate = upToDate,
+                            tracked = trackedRows,
+                            progressFor = progressFor,
+                            loading = loading,
+                            focusMode = focusMode,
+                            onUpdateAll = { updateAll(updates.map { it.app }) },
+                            onOpen = { selected = it; progress = null },
+                            onInstallTracked = ::installTracked,
+                            onForgetTracked = ::forgetTracked,
+                        )
 
-                            else -> SettingsScreen(
-                                focusEnabled = focusMode,
-                                confirmingFocusOff = confirmingFocusOff,
-                                onToggleFocus = {
-                                    if (focusMode) {
-                                        // Only leaving needs a pause. Entering
-                                        // is instant -- friction there would
-                                        // discourage the choice this exists for.
-                                        confirmingFocusOff = true
-                                    } else {
-                                        Focus.setEnabled(this@MainActivity, true)
-                                        focusMode = true
-                                        tabIndex = 0
-                                    }
-                                },
-                                onConfirmFocusOff = {
-                                    Focus.setEnabled(this@MainActivity, false)
-                                    focusMode = false
-                                    confirmingFocusOff = false
-                                },
-                                onCancelFocusOff = { confirmingFocusOff = false },
-                                onImport = {
-                                    pickExport.launch(
-                                        arrayOf("application/json", "text/plain", "*/*")
-                                    )
-                                },
-                            )
-                        }
+                        else -> SettingsScreen(
+                            focusEnabled = focusMode,
+                            onToggleFocus = {
+                                // Only ON is reachable from here. Off is the QR.
+                                Focus.setEnabled(this@MainActivity, true)
+                                focusMode = true
+                                tabIndex = 0
+                            },
+                            onScan = { scanning = true },
+                            onImport = {
+                                pickExport.launch(
+                                    arrayOf("application/json", "text/plain", "*/*")
+                                )
+                            },
+                        )
                     }
+                }
 
                     BottomBar(tabs, index) { tabIndex = it }
                 }
