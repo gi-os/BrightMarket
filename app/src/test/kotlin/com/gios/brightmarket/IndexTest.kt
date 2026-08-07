@@ -197,4 +197,33 @@ class IndexTest {
         assertEquals(1, updates.size)
         assertTrue(updates.first().updatable)
     }
+
+    @Test fun `update all puts the marketplace itself last`() {
+        // Installing BrightMarket kills this process. Anything queued behind it
+        // would silently never install, leaving a half-finished batch and no
+        // error -- so it has to be the final entry regardless of input order.
+        val self = "com.gios.brightmarket"
+        val apps = Index.parse(sample)
+        val market = apps.first().copy(pkg = self, name = "BrightMarket")
+
+        val ordered = Index.selfLast(listOf(market) + apps, self)
+        assertEquals(self, ordered.last().pkg)
+        // Everything else keeps its relative order.
+        assertEquals(apps.map { it.name }, ordered.dropLast(1).map { it.name })
+    }
+
+    @Test fun `selfLast is a no-op when the marketplace is not in the batch`() {
+        val apps = Index.parse(sample)
+        assertEquals(
+            apps.map { it.pkg },
+            Index.selfLast(apps, "com.gios.brightmarket").map { it.pkg },
+        )
+    }
+
+    @Test fun `the marketplace entry is flagged as self`() {
+        val self = "com.gios.lighttip"   // stand-in for our own package
+        val apps = Index.parse(sample)
+        val (updates, _) = Index.partitionInstalled(apps, mapOf(self to 1L), self)
+        assertTrue(updates.first().isSelf)
+    }
 }

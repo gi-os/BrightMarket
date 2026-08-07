@@ -53,6 +53,8 @@ enum class Sort(val label: String) {
 data class Installed(
     val app: App,
     val installedVersionCode: Long,
+    /** True for BrightMarket's own entry -- updating it closes the app. */
+    val isSelf: Boolean = false,
 ) {
     val updatable: Boolean get() = app.versionCode > installedVersionCode
 }
@@ -71,14 +73,28 @@ object Index {
     fun partitionInstalled(
         apps: List<App>,
         installed: Map<String, Long>,
+        selfPkg: String = "",
     ): Pair<List<Installed>, List<Installed>> {
         val present = apps.mapNotNull { app ->
-            installed[app.pkg]?.let { Installed(app, it) }
+            installed[app.pkg]?.let { Installed(app, it, app.pkg == selfPkg) }
         }
         val (updates, current) = present.partition { it.updatable }
         return updates.sortedByDescending { it.app.publishedAt } to
             current.sortedBy { it.app.name.lowercase() }
     }
+
+    /**
+     * Order a batch of updates so the marketplace updates itself LAST.
+     *
+     * Installing BrightMarket replaces the running package, which kills this
+     * process immediately. If it were anywhere but last in an "update all"
+     * run, every app after it would silently never install and the user would
+     * be left with a half-finished batch and no error. Putting it at the end
+     * means the worst case is that it is the only one interrupted -- and by
+     * then it has already done its job.
+     */
+    fun selfLast(targets: List<App>, selfPkg: String): List<App> =
+        targets.sortedBy { it.pkg == selfPkg }
 
 
     fun parse(json: String): List<App> {

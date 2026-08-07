@@ -86,7 +86,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             BrightMarketTheme {
                 val app = selected
-                val (updates, upToDate) = Index.partitionInstalled(apps, installed)
+                val (updates, upToDate) = Index.partitionInstalled(apps, installed, packageName)
 
                 if (app != null) {
                     DetailScreen(
@@ -190,7 +190,9 @@ class MainActivity : ComponentActivity() {
      */
     private fun updateAll(targets: List<App>) {
         lifecycleScope.launch {
-            for (app in targets) {
+            // Self last: installing BrightMarket kills this process, so anything
+            // queued behind it would never run. See Index.selfLast.
+            for (app in Index.selfLast(targets, packageName)) {
                 Installer.install(
                     ctx = this@MainActivity,
                     apkUrl = app.apkUrl,

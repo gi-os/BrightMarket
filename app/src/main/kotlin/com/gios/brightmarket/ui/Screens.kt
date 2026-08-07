@@ -343,6 +343,10 @@ private fun UpdateRow(
             progress is Installer.Progress.Failed -> progress.reason
             // Show both sides of the comparison: "1.2.10 → 1.3.19" says why the
             // row is here far better than the word "Update" does.
+            entry.updatable && entry.isSelf ->
+                // Updating the marketplace closes it. Saying so up front is
+                // better than the app appearing to crash mid-update.
+                "v${versionOf(entry.installedVersionCode)} → v${entry.app.version} · closes Market"
             entry.updatable -> "v${versionOf(entry.installedVersionCode)} → v${entry.app.version}"
             else -> "v${entry.app.version}"
         }
