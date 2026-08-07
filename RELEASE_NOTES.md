@@ -4,6 +4,35 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.13
+
+**Nightly builds are a channel you choose now, not the default.**
+
+Until today every push to this repo cut a release, and BrightMarket and
+Obtainium both offered it to everybody within the hour. A typo fix and a real
+feature arrived identically, and anyone who updates promptly was testing work in
+progress without having agreed to. Twelve releases went out in one day. That is
+fine for a project with one user and wrong for one people rely on.
+
+A push now publishes a **nightly**, marked as a prerelease. The catalogue has
+always skipped prereleases, so a nightly reaches nobody who hasn't asked for
+one. An official release is asked for deliberately.
+
+**Settings → Updates** picks your channel. Official releases only is the
+default, and staying there means you'll see fewer updates and each one will have
+been meant. Nightly builds gets you everything as it's made, including the ones
+that turn out to be wrong.
+
+A nightly is checked exactly as hard as a release: the index downloads it,
+hashes it, and reads its versionCode out of the APK, so an install off the
+nightly channel verifies the same way. And a nightly is only ever offered when
+it's genuinely ahead — cut an official release after the last nightly and
+everyone on the channel moves to it, rather than sitting on something older than
+the people who didn't opt in.
+
+Turning the channel off never downgrades you; Android won't install backwards.
+It stops offering nightlies, and the next official release catches you up.
+
 ## v1.12
 
 **The uninstall button is now big enough to press.** It shipped as small text

@@ -7,6 +7,12 @@ on:
       - '**.md'
       - 'signing-fingerprint.txt'
   workflow_dispatch:
+    inputs:
+      channel:
+        description: 'nightly (default) or official'
+        type: choice
+        options: [nightly, official]
+        default: nightly
 
 permissions:
   contents: write
@@ -32,8 +38,24 @@ jobs:
       # two must stay in agreement.
       - name: Stamp version
         id: ver
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          DISPATCH_CHANNEL: ${{ inputs.channel }}
         run: |
           RUN=${{ github.run_number }}
+
+          # Every push used to cut a release that Obtainium and BrightMarket
+          # both offered to everyone immediately, so a typo fix and a feature
+          # arrived the same way and people updating daily were testing work in
+          # progress. A push is a nightly now. An official build is asked for:
+          # either `[release]` in the commit message, or running this workflow
+          # by hand and picking official.
+          CHANNEL=nightly
+          case "$COMMIT_MSG" in *"[release]"*) CHANNEL=official ;; esac
+          if [ "$DISPATCH_CHANNEL" = "official" ]; then CHANNEL=official; fi
+          echo "channel=${CHANNEL}" >> "$GITHUB_OUTPUT"
+          echo "building a ${CHANNEL}"
+
           BASE=$(grep 'versionName' app/build.gradle.kts | head -1 | sed -E 's/.*"([0-9]+\.[0-9]+).*"/\1/')
           VERSION="${BASE}.${RUN}"
           sed -i -E "s/versionCode = .*/versionCode = ${RUN}/" app/build.gradle.kts
@@ -128,11 +150,22 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.ver.outputs.version }}
-          name: BrightMarket v${{ steps.ver.outputs.version }}
+          # Nightlies get their own tag namespace so they never look like a
+          # version, and prerelease: true is what keeps them out of the
+          # catalogue -- the index builder already skips prereleases, so a
+          # nightly reaches nobody who hasn't asked for one.
+          tag_name: >-
+            ${{ steps.ver.outputs.channel == 'official'
+                && format('v{0}', steps.ver.outputs.version)
+                || format('nightly-{0}', steps.ver.outputs.version) }}
+          name: >-
+            ${{ steps.ver.outputs.channel == 'official'
+                && format('BrightMarket v{0}', steps.ver.outputs.version)
+                || format('Nightly {0}', steps.ver.outputs.version) }}
           files: out/BrightMarket-v${{ steps.ver.outputs.version }}.apk
           body_path: body.md
-          make_latest: true
+          prerelease: ${{ steps.ver.outputs.channel != 'official' }}
+          make_latest: ${{ steps.ver.outputs.channel == 'official' }}
 
       # Tell the index to rebuild now rather than waiting for the hourly cron.
       - name: Ping the index

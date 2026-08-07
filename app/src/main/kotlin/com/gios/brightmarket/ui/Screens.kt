@@ -236,7 +236,9 @@ private fun Choice(title: String, body: String, onClick: () -> Unit) {
 @Composable
 fun SettingsScreen(
     focusEnabled: Boolean,
+    nightly: Boolean,
     onToggleFocus: () -> Unit,
+    onToggleNightly: () -> Unit,
     onScan: () -> Unit,
     onImport: () -> Unit,
 ) {
@@ -296,6 +298,33 @@ fun SettingsScreen(
                 modifier = Modifier.lightClickable(onClick = onToggleFocus),
             )
         }
+
+        Spacer(Modifier.height(gridUnits(2f)))
+        Text("UPDATES", style = MaterialTheme.typography.titleMedium, color = Light.ContentSecondary)
+        Spacer(Modifier.height(gridUnits(0.4f)))
+        Text(
+            if (nightly) {
+                "Nightly. You get every build as it's made, including the ones " +
+                    "that turn out to be wrong. Newer, and rougher."
+            } else {
+                "Official releases only. Nightly builds are made on every change " +
+                    "and aren't offered to you."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = Light.ContentSecondary,
+        )
+        Spacer(Modifier.height(gridUnits(0.6f)))
+        // Reversible, unlike focus mode, so it is a plain switch. Turning it
+        // off doesn't downgrade anything -- Android won't install backwards --
+        // it just stops offering nightlies, and the next official release
+        // catches you up.
+        Text(
+            if (nightly) "USE OFFICIAL RELEASES" else "USE NIGHTLY BUILDS",
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier
+                .lightClickable(onClick = onToggleNightly)
+                .padding(vertical = gridUnits(0.4f)),
+        )
 
         Spacer(Modifier.height(gridUnits(2f)))
         Text("IMPORT", style = MaterialTheme.typography.titleMedium, color = Light.ContentSecondary)
@@ -645,9 +674,11 @@ private fun UpdateRow(
                 progress is Installer.Progress.AwaitingConfirmation -> "Confirm the install…"
                 progress is Installer.Progress.Failed -> progress.reason
                 entry.updatable && entry.isSelf ->
-                    "build ${entry.installedVersionCode} → v${entry.app.version} · closes Market"
+                    "build ${entry.installedVersionCode} → ${entry.target.version} · closes Market"
+                entry.updatable && entry.target.nightly ->
+                    "build ${entry.installedVersionCode} → ${entry.target.version} · nightly"
                 entry.updatable ->
-                    "build ${entry.installedVersionCode} → v${entry.app.version}"
+                    "build ${entry.installedVersionCode} → v${entry.target.version}"
                 else -> "v${entry.app.version}"
             },
             style = MaterialTheme.typography.bodySmall,

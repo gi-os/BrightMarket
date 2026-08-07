@@ -24,6 +24,7 @@ import com.gios.brightmarket.data.Index
 import com.gios.brightmarket.data.Obtainium
 import com.gios.brightmarket.data.Sort
 import com.gios.brightmarket.data.Tracked
+import com.gios.brightmarket.data.target
 import com.gios.brightmarket.install.Installer
 import com.gios.brightmarket.ui.*
 import com.gios.light.common.report.LightReport
@@ -46,6 +47,7 @@ class MainActivity : ComponentActivity() {
 
     private var onboarded by mutableStateOf(false)
     private var focusMode by mutableStateOf(false)
+    private var nightly by mutableStateOf(false)
 
     private var progress by mutableStateOf<Installer.Progress?>(null)
 
@@ -181,6 +183,7 @@ class MainActivity : ComponentActivity() {
         followed = Followed.all(this)
         onboarded = Focus.onboarded(this)
         focusMode = Focus.enabled(this)
+        nightly = Focus.nightly(this)
         handleLink(intent)
 
         setContent {
@@ -227,7 +230,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 val (updates, upToDate, notInstalled) =
-                    Index.partitionInstalled(apps, installed, packageName, followed)
+                    Index.partitionInstalled(apps, installed, packageName, followed, nightly)
 
                 // Three destinations, which is the SDK's hard ceiling for a
                 // bottom bar containing any text item.
@@ -293,6 +296,16 @@ class MainActivity : ComponentActivity() {
 
                         else -> SettingsScreen(
                             focusEnabled = focusMode,
+                            nightly = nightly,
+                            onToggleNightly = {
+                                val next = !nightly
+                                Focus.setNightly(this@MainActivity, next)
+                                nightly = next
+                                toast(
+                                    if (next) "Nightly builds on"
+                                    else "Official releases only"
+                                )
+                            },
                             onToggleFocus = {
                                 // Only ON is reachable from here. Off is the QR.
                                 Focus.setEnabled(this@MainActivity, true)
@@ -548,7 +561,7 @@ class MainActivity : ComponentActivity() {
                         // "Refreshed" alone leaves you no better informed than
                         // before you pressed it.
                         val (updates, _, _) =
-                            Index.partitionInstalled(apps, installed, packageName, followed)
+                            Index.partitionInstalled(apps, installed, packageName, followed, nightly)
                         toast(
                             when (updates.size) {
                                 0 -> "Up to date · ${apps.size} apps"
@@ -574,11 +587,16 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun install(app: App) {
+        // Resolved here rather than passed in, so every route to an install --
+        // the detail page, a row, update-all -- lands on the same build. Two
+        // places deciding this independently is how a UI ends up promising a
+        // nightly and installing stable.
+        val t = app.target(nightly)
         lifecycleScope.launch {
             Installer.install(
                 ctx = this@MainActivity,
-                apkUrl = app.apkUrl,
-                expectedSha256 = app.sha256,
+                apkUrl = t.apkUrl,
+                expectedSha256 = t.sha256,
                 pkg = app.pkg,
                 onProgress = { progress = it },
             ).onSuccess {
@@ -603,10 +621,11 @@ class MainActivity : ComponentActivity() {
             // Self last: installing BrightMarket kills this process, so anything
             // queued behind it would never run. See Index.selfLast.
             for (app in Index.selfLast(targets, packageName)) {
+                val t = app.target(nightly)
                 Installer.install(
                     ctx = this@MainActivity,
-                    apkUrl = app.apkUrl,
-                    expectedSha256 = app.sha256,
+                    apkUrl = t.apkUrl,
+                    expectedSha256 = t.sha256,
                     pkg = app.pkg,
                     onProgress = { p -> progressFor = progressFor + (app.pkg to p) },
                 )

@@ -36,6 +36,26 @@ data class App(
      * loading state.
      */
     val screenshots: List<String> = emptyList(),
+    /**
+     * The newest prerelease, when the app publishes one. Null for almost every
+     * app — treat that as "there is no nightly", not as a loading state.
+     *
+     * Deliberately a separate object rather than a flag on [version]: an app on
+     * the nightly channel still needs to know what stable is, so that turning
+     * the channel off can put you back on it.
+     */
+    val preview: Preview? = null,
+)
+
+/** A prerelease build, checked exactly as hard as a stable one. */
+data class Preview(
+    val version: String,
+    val versionCode: Long,
+    val apkUrl: String,
+    val size: Long,
+    val sha256: String,
+    val publishedAt: String,
+    val notes: String,
 )
 
 enum class Sort(val label: String) {
@@ -50,13 +70,41 @@ enum class Sort(val label: String) {
  * `installedVersionCode` is null only for apps in the index that aren't on the
  * phone -- those never appear here.
  */
+/**
+ * What an app would install on a given channel.
+ *
+ * A nightly is only taken when it is genuinely ahead of stable. Otherwise an
+ * official release cut after the last nightly would be ignored by everyone on
+ * the nightly channel — they would sit on an older build than everybody else,
+ * which is the opposite of what opting in means.
+ */
+data class Target(
+    val version: String,
+    val versionCode: Long,
+    val apkUrl: String,
+    val sha256: String,
+    val notes: String,
+    val nightly: Boolean,
+)
+
+fun App.target(nightly: Boolean): Target {
+    val pv = preview
+    return if (nightly && pv != null && pv.versionCode > versionCode) {
+        Target(pv.version, pv.versionCode, pv.apkUrl, pv.sha256, pv.notes, true)
+    } else {
+        Target(version, versionCode, apkUrl, sha256, notes, false)
+    }
+}
+
 data class Installed(
     val app: App,
     val installedVersionCode: Long,
     /** True for BrightMarket's own entry -- updating it closes the app. */
     val isSelf: Boolean = false,
+    /** Resolved once, at partition time, so the UI and the installer agree. */
+    val target: Target = app.target(false),
 ) {
-    val updatable: Boolean get() = app.versionCode > installedVersionCode
+    val updatable: Boolean get() = target.versionCode > installedVersionCode
 }
 
 object Index {
@@ -89,9 +137,12 @@ object Index {
         installed: Map<String, Long>,
         selfPkg: String = "",
         followed: Set<String> = emptySet(),
+        nightly: Boolean = false,
     ): Triple<List<Installed>, List<Installed>, List<App>> {
         val present = apps.mapNotNull { app ->
-            installed[app.pkg]?.let { Installed(app, it, app.pkg == selfPkg) }
+            installed[app.pkg]?.let {
+                Installed(app, it, app.pkg == selfPkg, app.target(nightly))
+            }
         }
         val (updates, current) = present.partition { it.updatable }
         val notInstalled = apps
@@ -144,6 +195,23 @@ object Index {
                         arr.optJSONObject(j)?.optString("url")?.takeIf { it.isNotBlank() }
                     }
                 } ?: emptyList(),
+                preview = o.optJSONObject("preview")?.let { pv ->
+                    // Every field or none. A half-read preview would offer an
+                    // install with no hash to check it against, which is the
+                    // one thing the nightly channel must not become.
+                    val url = pv.optString("apk")
+                    val sha = pv.optString("sha256")
+                    if (url.isBlank() || sha.isBlank()) null
+                    else Preview(
+                        version = pv.optString("version"),
+                        versionCode = pv.optLong("versionCode"),
+                        apkUrl = url,
+                        size = pv.optLong("size"),
+                        sha256 = sha,
+                        publishedAt = pv.optString("published", ""),
+                        notes = pv.optString("notes", ""),
+                    )
+                },
             )
         }
     }

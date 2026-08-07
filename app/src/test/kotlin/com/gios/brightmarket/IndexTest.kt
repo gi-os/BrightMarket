@@ -5,7 +5,11 @@ import com.gios.brightmarket.data.Index
 import com.gios.brightmarket.data.Obtainium
 import com.gios.brightmarket.data.Tracked
 import com.gios.brightmarket.data.Sort
+import com.gios.brightmarket.data.target
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -370,5 +374,85 @@ class MarkdownTest {
     @Test fun `empty input doesn't blow up`() {
         assertEquals(1, com.gios.brightmarket.data.Markdown.inline("").size)
         assertEquals("", com.gios.brightmarket.data.Markdown.plain(""))
+    }
+
+    // -----------------------------------------------------------------------
+    // Nightly channel
+    // -----------------------------------------------------------------------
+
+    private fun withPreview(previewCode: Long?): String {
+        val preview = if (previewCode == null) "" else """
+            ,"preview": {
+              "version": "nightly-$previewCode", "versionCode": $previewCode,
+              "apk": "https://e/n.apk", "size": 1, "sha256": "beef",
+              "published": "2026-08-07T00:00:00Z", "notes": ""
+            }
+        """.trimIndent()
+        return """
+        {"format":1,"apps":[{
+          "pkg":"a.b.c","name":"App","repo":"o/r","category":"utilities","summary":"s",
+          "latest":{"version":"1.0.10","versionCode":10,"apk":"https://e/s.apk",
+                    "size":1,"sha256":"cafe","published":"2026-08-01T00:00:00Z","notes":""}
+          $preview
+        }]}
+        """.trimIndent()
+    }
+
+    @Test
+    fun `preview is parsed when present and null when absent`() {
+        assertNull(Index.parse(withPreview(null)).first().preview)
+        val p = Index.parse(withPreview(20)).first().preview
+        assertNotNull(p)
+        assertEquals(20L, p!!.versionCode)
+        assertEquals("https://e/n.apk", p.apkUrl)
+    }
+
+    @Test
+    fun `a preview without a hash is refused`() {
+        // No sha256 means nothing to verify the download against, which is the
+        // one thing the nightly channel must not quietly become.
+        val json = withPreview(20).replace("\"sha256\": \"beef\"", "\"sha256\": \"\"")
+        assertNull(Index.parse(json).first().preview)
+    }
+
+    @Test
+    fun `off the nightly channel the preview is ignored entirely`() {
+        val app = Index.parse(withPreview(20)).first()
+        val t = app.target(nightly = false)
+        assertFalse(t.nightly)
+        assertEquals(10L, t.versionCode)
+    }
+
+    @Test
+    fun `on the nightly channel a newer preview wins`() {
+        val t = Index.parse(withPreview(20)).first().target(nightly = true)
+        assertTrue(t.nightly)
+        assertEquals(20L, t.versionCode)
+    }
+
+    @Test
+    fun `an official release that overtakes the nightly wins even on nightly`() {
+        // The trap: cut a stable build after the last nightly and everyone who
+        // opted in would sit on something older than everybody else.
+        val t = Index.parse(withPreview(5)).first().target(nightly = true)
+        assertFalse(t.nightly)
+        assertEquals(10L, t.versionCode)
+    }
+
+    @Test
+    fun `partitionInstalled offers a nightly update only on the nightly channel`() {
+        val apps = Index.parse(withPreview(20))
+        val installed = mapOf("a.b.c" to 10L)
+
+        val (stableUpdates, stableCurrent, _) =
+            Index.partitionInstalled(apps, installed, nightly = false)
+        assertTrue(stableUpdates.isEmpty())
+        assertEquals(1, stableCurrent.size)
+
+        val (nightlyUpdates, _, _) =
+            Index.partitionInstalled(apps, installed, nightly = true)
+        assertEquals(1, nightlyUpdates.size)
+        assertTrue(nightlyUpdates.first().target.nightly)
+        assertEquals(20L, nightlyUpdates.first().target.versionCode)
     }
 }

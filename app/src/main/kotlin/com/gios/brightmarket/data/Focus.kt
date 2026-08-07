@@ -31,6 +31,7 @@ object Focus {
     private const val PREFS = "focus"
     private const val KEY_ENABLED = "enabled"
     private const val KEY_ONBOARDED = "onboarded"
+    private const val KEY_NIGHTLY = "nightly"
 
     /** `brightmarket://` links, carried by QR codes from the desktop site. */
     sealed interface Link {
@@ -40,6 +41,22 @@ object Focus {
     }
 
     fun enabled(ctx: Context): Boolean = prefs(ctx).getBoolean(KEY_ENABLED, false)
+
+    /**
+     * Whether to be offered prerelease builds. Off by default and it should
+     * stay that way: a nightly is whatever was pushed, and the person who has
+     * not gone looking for that has not agreed to run it.
+     *
+     * Lives here rather than in its own file because it is the same shape of
+     * thing — a preference about how the app behaves, stored beside the other
+     * one — and a second SharedPreferences file for one boolean is filing, not
+     * design.
+     */
+    fun nightly(ctx: Context): Boolean = prefs(ctx).getBoolean(KEY_NIGHTLY, false)
+
+    fun setNightly(ctx: Context, on: Boolean) {
+        prefs(ctx).edit().putBoolean(KEY_NIGHTLY, on).apply()
+    }
 
     /**
      * True once the user has actually chosen a mode. Distinct from [enabled]:
