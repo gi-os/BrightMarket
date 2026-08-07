@@ -86,13 +86,26 @@ jobs:
 
       # One asset per release: an updater picks whatever it finds, and a debug APK
       # alongside the release one is how it installs the wrong signature.
+      # Curated notes beat an auto-generated commit list: the commit log says
+      # what changed in the code, the notes say what changed for the person
+      # installing it. Falls back to generated notes if the file is missing so a
+      # release never blocks on prose.
+      - name: Extract release notes
+        id: notes
+        run: |
+          if [ -f RELEASE_NOTES.md ]; then
+            awk '/^## /{n++} n==1' RELEASE_NOTES.md | tail -n +2 > body.md
+          fi
+          [ -s body.md ] || echo "See the commit log for changes in this build." > body.md
+          echo "--- release body ---"; cat body.md
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.ver.outputs.version }}
           name: BrightMarket v${{ steps.ver.outputs.version }}
           files: out/BrightMarket-v${{ steps.ver.outputs.version }}.apk
-          generate_release_notes: true
+          body_path: body.md
           make_latest: true
 
       # Tell the index to rebuild now rather than waiting for the hourly cron.

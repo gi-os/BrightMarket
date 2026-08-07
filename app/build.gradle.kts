@@ -17,7 +17,7 @@ android {
         targetSdk = 35
         // CI overwrites both from the workflow run number; see .github/workflows/build.yml
         versionCode = 1
-        versionName = "1.0.0"
+        versionName = "1.1.0"
 
         ndk { abiFilters += "arm64-v8a" }
 
@@ -78,6 +78,16 @@ dependencies {
     // Daily update checks. WorkManager rather than an alarm: the check is
     // deferrable and network-gated, which is exactly what it's for.
     implementation("androidx.work:work-runtime-ktx:2.10.0")
+
+    // QR scanning, carried over from LightQR: CameraX preview + frame analysis,
+    // decoded by ZXing on the luminance plane. ML Kit is not an option -- LightOS
+    // ships without Google Play Services.
+    val camerax = "1.3.4"
+    implementation("androidx.camera:camera-core:$camerax")
+    implementation("androidx.camera:camera-camera2:$camerax")
+    implementation("androidx.camera:camera-lifecycle:$camerax")
+    implementation("androidx.camera:camera-view:$camerax")
+    implementation("com.google.zxing:core:3.5.3")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 

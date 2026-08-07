@@ -5,6 +5,9 @@
     <!-- Without this the PackageInstaller session can't even reach the system's
          own confirmation dialog. It is not a silent-install permission. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Scanning a QR from the desktop catalogue, or a GitHub repo URL. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
         android:allowBackup="false"

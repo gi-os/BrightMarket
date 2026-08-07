@@ -45,10 +45,18 @@ object Installer {
         null
     }
 
+    /**
+     * @param expectedSha256 the hash the index published, or null for a tracked
+     *   repo that BrightMarket doesn't index. Null means the download CANNOT be
+     *   verified — nothing generated a hash for it — so the check is skipped
+     *   rather than faked. That difference is surfaced in the UI; quietly
+     *   accepting an unverified download would make the indexed guarantee
+     *   meaningless.
+     */
     suspend fun install(
         ctx: Context,
         apkUrl: String,
-        expectedSha256: String,
+        expectedSha256: String?,
         pkg: String,
         onProgress: (Progress) -> Unit = {},
     ): Result<Unit> = withContext(Dispatchers.IO) {
@@ -56,6 +64,7 @@ object Installer {
             val apk = File(ctx.cacheDir, "$pkg.apk")
             download(apkUrl, apk, onProgress)
 
+            if (expectedSha256 != null) {
             onProgress(Progress.Verifying)
             val actual = sha256(apk)
             if (!actual.equals(expectedSha256, ignoreCase = true)) {
@@ -64,6 +73,7 @@ object Installer {
                 // only thing making it trustworthy. A mismatch is never worth
                 // "probably fine".
                 error("Download didn't match the expected checksum, so it wasn't installed.")
+            }
             }
 
             onProgress(Progress.AwaitingConfirmation)

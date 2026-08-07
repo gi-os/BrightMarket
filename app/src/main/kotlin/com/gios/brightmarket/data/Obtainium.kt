@@ -52,6 +52,20 @@ object Obtainium {
         return m.groupValues[1].removeSuffix(".git")
     }
 
+    /**
+     * Everything in the export that BrightMarket doesn't index, as trackable
+     * repos.
+     *
+     * The earlier behaviour — report a count of what didn't match and drop it —
+     * made the import a partial migration, which is the worst kind: it looks
+     * finished. If someone is replacing Obtainium, the apps it was watching
+     * have to keep being watched, whether or not anyone has submitted them.
+     */
+    fun trackable(unmatched: List<Entry>): List<Tracked.Entry> =
+        unmatched.mapNotNull { e ->
+            e.repo?.let { Tracked.Entry(repo = it, pkg = e.pkg) }
+        }
+
     fun match(entries: List<Entry>, index: List<App>): ImportResult {
         val byPkg = index.associateBy { it.pkg }
         val byRepo = index.associateBy { it.repo.lowercase() }

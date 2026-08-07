@@ -34,7 +34,7 @@ import com.gios.brightmarket.install.Installer
  * bars are separated from content by space, never by a divider line.
  */
 @Composable
-fun TopBar(title: String, onBack: (() -> Unit)? = null) {
+fun TopBar(title: String, onBack: (() -> Unit)? = null, onScan: (() -> Unit)? = null) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -52,6 +52,15 @@ fun TopBar(title: String, onBack: (() -> Unit)? = null) {
             )
         }
         Text(title, style = MaterialTheme.typography.labelMedium)
+        if (onScan != null) {
+            Spacer(Modifier.weight(1f))
+            Text(
+                "SCAN",
+                style = MaterialTheme.typography.labelMedium,
+                color = Light.ContentSecondary,
+                modifier = Modifier.lightClickable(onClick = onScan),
+            )
+        }
     }
 }
 
@@ -397,11 +406,14 @@ private fun Message(text: String) {
 fun UpdatesScreen(
     updates: List<Installed>,
     upToDate: List<Installed>,
+    tracked: List<TrackedRow>,
     progressFor: Map<String, Installer.Progress>,
     loading: Boolean,
     focusMode: Boolean,
     onUpdateAll: () -> Unit,
     onOpen: (App) -> Unit,
+    onInstallTracked: (TrackedRow) -> Unit,
+    onForgetTracked: (TrackedRow) -> Unit,
 ) {
     LazyColumn(Modifier.fillMaxSize()) {
         if (updates.isEmpty() && upToDate.isEmpty()) {
@@ -447,6 +459,79 @@ fun UpdatesScreen(
                 UpdateRow(entry, progressFor[entry.app.pkg]) { onOpen(entry.app) }
             }
         }
+
+        if (tracked.isNotEmpty()) {
+            // Named, not blended in. An indexed app passed the submission
+            // checks and carries a hash the client verifies; a tracked repo has
+            // had none of that. Showing them identically would imply a
+            // guarantee only one of them has.
+            item { SectionHeader("NOT IN BRIGHTMARKET (${tracked.size})") }
+            items(tracked, key = { it.repo }) { row ->
+                TrackedRowView(row, progressFor[row.pkg ?: row.repo], onInstallTracked, onForgetTracked)
+            }
+        }
+    }
+}
+
+/** A tracked repo, resolved (or not) against its GitHub releases. */
+data class TrackedRow(
+    val repo: String,
+    val name: String,
+    val pkg: String?,
+    val version: String?,
+    val apkUrl: String?,
+    val installedVersionCode: Long?,
+    val versionCode: Long?,
+) {
+    val updatable: Boolean
+        get() = versionCode != null && installedVersionCode != null &&
+            versionCode > installedVersionCode
+}
+
+@Composable
+private fun TrackedRowView(
+    row: TrackedRow,
+    progress: Installer.Progress?,
+    onInstall: (TrackedRow) -> Unit,
+    onForget: (TrackedRow) -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .lightClickable { if (row.apkUrl != null) onInstall(row) }
+            .padding(horizontal = gridUnits(Grid.INSET), vertical = gridUnits(0.8f))
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(row.name, style = MaterialTheme.typography.bodyLarge)
+            Spacer(Modifier.width(gridUnits(0.5f)))
+            Text(
+                "UNLISTED",
+                style = MaterialTheme.typography.labelSmall,
+                color = Light.ContentSecondary,
+            )
+        }
+        Text(
+            text = when {
+                progress is Installer.Progress.Downloading -> "Downloading…"
+                progress is Installer.Progress.AwaitingConfirmation -> "Confirm the install…"
+                progress is Installer.Progress.Failed -> progress.reason
+                row.apkUrl == null -> "${row.repo} · no APK release found"
+                row.updatable -> "${row.repo} · update to ${row.version}"
+                row.installedVersionCode != null -> "${row.repo} · ${row.version}"
+                else -> "${row.repo} · ${row.version} · not installed"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = Light.ContentSecondary,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(Modifier.height(gridUnits(0.2f)))
+        Text(
+            "FORGET",
+            style = MaterialTheme.typography.labelSmall,
+            color = Light.ContentSecondary,
+            modifier = Modifier.lightClickable { onForget(row) },
+        )
     }
 }
 

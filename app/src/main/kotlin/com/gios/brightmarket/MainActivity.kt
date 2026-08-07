@@ -17,6 +17,7 @@ import com.gios.brightmarket.data.Focus
 import com.gios.brightmarket.data.Index
 import com.gios.brightmarket.data.Obtainium
 import com.gios.brightmarket.data.Sort
+import com.gios.brightmarket.data.Tracked
 import com.gios.brightmarket.install.Installer
 import com.gios.brightmarket.ui.*
 import kotlinx.coroutines.Dispatchers
@@ -49,6 +50,9 @@ class MainActivity : ComponentActivity() {
 
     /** A package named by a QR link, opened once the index has loaded. */
     private var pendingPkg: String? = null
+
+    private var scanning by mutableStateOf(false)
+    private var trackedRows by mutableStateOf<List<TrackedRow>>(emptyList())
 
     private val pickExport = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -93,6 +97,23 @@ class MainActivity : ComponentActivity() {
                     return@BrightMarketTheme
                 }
 
+                if (scanning) {
+                    // Full screen: a viewfinder squeezed under the chrome is
+                    // harder to aim, and there is nothing else to do here.
+                    androidx.compose.foundation.layout.Box(
+                        Modifier.fillMaxSize().background(Light.Background)
+                    ) {
+                        Column(Modifier.fillMaxSize()) {
+                            TopBar("SCAN", onBack = { scanning = false })
+                            ScanScreen { text ->
+                                scanning = false
+                                onScanned(text)
+                            }
+                        }
+                    }
+                    return@BrightMarketTheme
+                }
+
                 val app = selected
                 if (app != null) {
                     DetailScreen(
@@ -117,7 +138,7 @@ class MainActivity : ComponentActivity() {
                 val index = tabIndex.coerceIn(0, tabs.lastIndex)
 
                 Column(Modifier.fillMaxSize().background(Light.Background)) {
-                    TopBar("BRIGHTMARKET")
+                    TopBar("BRIGHTMARKET", onScan = { scanning = true })
 
                     Column(Modifier.weight(1f)) {
                         when (index) {
@@ -128,11 +149,14 @@ class MainActivity : ComponentActivity() {
                                 UpdatesScreen(
                                     updates = updates,
                                     upToDate = upToDate,
+                                    tracked = trackedRows,
                                     progressFor = progressFor,
                                     loading = loading,
                                     focusMode = true,
                                     onUpdateAll = { updateAll(updates.map { it.app }) },
                                     onOpen = { selected = it; progress = null },
+                                    onInstallTracked = ::installTracked,
+                                    onForgetTracked = ::forgetTracked,
                                 )
                             } else {
                                 BrowseScreen(
@@ -154,11 +178,14 @@ class MainActivity : ComponentActivity() {
                             1 -> UpdatesScreen(
                                 updates = updates,
                                 upToDate = upToDate,
+                                tracked = trackedRows,
                                 progressFor = progressFor,
                                 loading = loading,
                                 focusMode = focusMode,
                                 onUpdateAll = { updateAll(updates.map { it.app }) },
                                 onOpen = { selected = it; progress = null },
+                                onInstallTracked = ::installTracked,
+                                onForgetTracked = ::forgetTracked,
                             )
 
                             else -> SettingsScreen(
@@ -196,6 +223,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         refresh()
+        refreshTracked()
     }
 
     /** QR links arrive while the app is already open far more often than not. */
@@ -222,7 +250,11 @@ class MainActivity : ComponentActivity() {
      */
     private fun handleLink(intent: Intent?) {
         val data = intent?.data?.toString() ?: return
-        when (val link = Focus.parseLink(data)) {
+        Focus.parseLink(data)?.let { handleLinkValue(it) }
+    }
+
+    private fun handleLinkValue(link: Focus.Link) {
+        when (link) {
             is Focus.Link.OpenApp -> {
                 // The index may not have loaded yet; remember it and open once
                 // it has, rather than silently dropping the scan.
@@ -236,7 +268,81 @@ class MainActivity : ComponentActivity() {
                 tabIndex = 0
                 toast(if (link.on) "Focus mode on." else "Focus mode off.")
             }
-            null -> Unit  // not ours; a QR scanner decodes all sorts of things
+        }
+    }
+
+    /**
+     * A scanned code. Two shapes are accepted: a brightmarket:// link from the
+     * desktop catalogue, and a plain GitHub repo URL — the second is what makes
+     * this useful for apps nobody has submitted.
+     */
+    private fun onScanned(text: String) {
+        val link = Focus.parseLink(text)
+        if (link != null) {
+            handleLinkValue(link)
+            return
+        }
+        val repo = Tracked.repoFromAny(text)
+        if (repo == null) {
+            toast("That code isn't a BrightMarket link or a GitHub repo.")
+            return
+        }
+        if (apps.any { it.repo.equals(repo, ignoreCase = true) }) {
+            // Already indexed: open it properly rather than tracking a duplicate
+            // that would then update itself alongside the indexed copy.
+            selected = apps.first { it.repo.equals(repo, ignoreCase = true) }
+            return
+        }
+        val added = Tracked.add(this, Tracked.Entry(repo = repo))
+        toast(if (added) "Tracking $repo" else "Already tracking $repo")
+        refreshTracked()
+    }
+
+    private fun installTracked(row: TrackedRow) {
+        val url = row.apkUrl ?: return
+        lifecycleScope.launch {
+            val key = row.pkg ?: row.repo
+            Installer.install(
+                ctx = this@MainActivity,
+                apkUrl = url,
+                // No hash exists for an unlisted app; see Installer.install.
+                expectedSha256 = null,
+                pkg = row.pkg ?: "",
+                onProgress = { p -> progressFor = progressFor + (key to p) },
+            )
+            progressFor = progressFor - key
+            refreshInstalled()
+            refreshTracked()
+        }
+    }
+
+    private fun forgetTracked(row: TrackedRow) {
+        Tracked.remove(this, row.repo)
+        refreshTracked()
+        toast("Stopped tracking ${row.repo}")
+    }
+
+    private fun refreshTracked() {
+        lifecycleScope.launch {
+            val entries = Tracked.all(this@MainActivity)
+            val rows = withContext(Dispatchers.IO) {
+                entries.map { e ->
+                    val resolved = Tracked.resolve(e)
+                    val pkg = e.pkg ?: resolved?.entry?.pkg
+                    TrackedRow(
+                        repo = e.repo,
+                        name = e.name,
+                        pkg = pkg,
+                        version = resolved?.version,
+                        apkUrl = resolved?.apkUrl,
+                        installedVersionCode = pkg?.let {
+                            Installer.installedVersionCode(this@MainActivity, it)
+                        },
+                        versionCode = resolved?.versionCode,
+                    )
+                }
+            }
+            trackedRows = rows
         }
     }
 
