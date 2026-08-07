@@ -89,8 +89,12 @@ object Installer {
         /** Called with (applicationId, versionCode) once the APK is on disk. */
         onIdentified: (String, Long) -> Unit = { _, _ -> },
     ): Result<Unit> = withContext(Dispatchers.IO) {
+        // Named per install, not per package. `pkg` is empty for a tracked repo
+        // whose applicationId isn't known yet, which made the file ".apk" --
+        // one shared name for every unlisted download, so two of them running
+        // near each other wrote over one another.
+        val apk = File(ctx.cacheDir, "dl-" + (pkg.ifBlank { apkUrl }).hashCode().toUInt().toString(16) + ".apk")
         runCatching {
-            val apk = File(ctx.cacheDir, "$pkg.apk")
             download(apkUrl, apk, onProgress)
 
             if (expectedSha256 != null) {
@@ -108,16 +112,30 @@ object Installer {
             // Learn what this APK actually is before handing it to the
             // installer -- for a tracked repo this is the only chance to find
             // out, and it is what makes future update checks possible.
-            readApk(ctx, apk)?.let { (id, code) -> onIdentified(id, code) }
+            // Read once: this parses the whole archive, and these are 60MB files.
+            val identity = readApk(ctx, apk)
+            identity?.let { (id, code) -> onIdentified(id, code) }
+
+            // An APK the package manager cannot parse is not going to install,
+            // and saying so here is far more use than the installer's own
+            // "There was a problem parsing the package".
+            if (identity == null) {
+                error("That download isn't a readable Android package. It may have arrived incomplete — try again.")
+            }
 
             onProgress(Progress.AwaitingConfirmation)
-            commitSession(ctx, apk, pkg.ifBlank { readApk(ctx, apk)?.first ?: pkg })
+            commitSession(ctx, apk, pkg.ifBlank { identity.first })
             apk.delete()
             // delete() returns Boolean, which would make this Result<Boolean>.
             // The contract is Result<Unit>, and whether the temp copy was still
             // on disk is not something a caller should branch on.
             Unit
-        }.onFailure { onProgress(Progress.Failed(it.message ?: "install failed")) }
+        }.onFailure {
+            // A partial file left in the cache is how a retry inherits the
+            // failure it was meant to escape.
+            apk.delete()
+            onProgress(Progress.Failed(it.message ?: "install failed"))
+        }
     }
 
     private fun download(url: String, dest: File, onProgress: (Progress) -> Unit) {
@@ -143,6 +161,17 @@ object Installer {
                         onProgress(Progress.Downloading(written, total))
                     }
                 }
+            }
+
+            // A dropped connection ends the read loop without throwing, so a
+            // truncated file looked like a finished download. For an indexed app
+            // the sha256 catches it a moment later; for an unlisted one there is
+            // no hash, so a short file went straight to the installer, failed
+            // there for reasons that named nothing, and worked on the retry that
+            // happened to complete. Which is precisely how this gets reported:
+            // "it failed, then it didn't".
+            if (total > 0 && written != total) {
+                error("Download stopped early — got ${written / 1_000_000}MB of ${total / 1_000_000}MB.")
             }
         } finally {
             conn.disconnect()
