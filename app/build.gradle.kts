@@ -33,7 +33,7 @@ android {
         targetSdk = 35
         // CI overwrites both from the workflow run number; see .github/workflows/build.yml
         versionCode = 1
-        versionName = "1.20.0"
+        versionName = "1.21.0"
 
         ndk { abiFilters += "arm64-v8a" }
 

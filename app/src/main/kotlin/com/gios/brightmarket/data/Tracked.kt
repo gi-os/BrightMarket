@@ -187,6 +187,15 @@ object Tracked {
             if (code == 403 || code == 429) {
                 val remaining = conn.getHeaderField("X-RateLimit-Remaining")?.toLongOrNull()
                 val reset = conn.getHeaderField("X-RateLimit-Reset")?.toLongOrNull() ?: 0L
+
+                // The API is spent, but github.com itself isn't rate limited at
+                // all. Ask it instead.
+                withoutApi(entry)?.let { resolved ->
+                    val ok = Outcome.Ok(resolved)
+                    store(ctx, entry.repo, Cached(null, System.currentTimeMillis(), ok))
+                    return ok
+                }
+
                 val outcome =
                     if (remaining == 0L) Outcome.RateLimited(reset) else Outcome.Unreachable
                 // Deliberately not cached as a result: being throttled says
@@ -233,6 +242,76 @@ object Tracked {
             conn.disconnect()
         }
     }
+
+    /**
+     * The same question, asked of github.com rather than api.github.com.
+     *
+     * The API allows 60 requests an hour **per source IP**, and on a mobile
+     * carrier that IP is shared with everyone else behind the same NAT. So the
+     * budget can be gone before this phone has made a single request — which is
+     * why one tracked repo could work and then everything fail at once, with no
+     * change in what the user did.
+     *
+     * The ordinary web pages carry no rate limit. Two requests:
+     *
+     *  1. `/releases/latest` redirects to the newest release that is NOT a
+     *     prerelease, which is exactly the selection the API path makes. The
+     *     releases Atom feed would be one request instead of two, but it lists
+     *     prereleases indistinguishably, and offering someone a beta because it
+     *     was cheaper to find is not a trade worth making.
+     *  2. `/releases/expanded_assets/<tag>` is the fragment the releases page
+     *     lazy-loads, and it names the assets.
+     *
+     * Returns null rather than throwing: this is already the unhappy path, and
+     * the caller has a real answer to fall back on.
+     */
+    private fun withoutApi(entry: Entry): Resolved? = runCatching {
+        val latest = (URL("https://github.com/${entry.repo}/releases/latest")
+            .openConnection() as HttpURLConnection).apply {
+            instanceFollowRedirects = false
+            connectTimeout = 15_000
+            readTimeout = 30_000
+            requestMethod = "HEAD"
+            setRequestProperty("User-Agent", "BrightMarket")
+        }
+        val location = try {
+            if (latest.responseCode !in 300..399) return null
+            latest.getHeaderField("Location") ?: return null
+        } finally {
+            latest.disconnect()
+        }
+        // ".../releases/tag/v1.4.0"
+        val tag = location.substringAfterLast('/').takeIf { it.isNotBlank() } ?: return null
+
+        val page = (URL("https://github.com/${entry.repo}/releases/expanded_assets/$tag")
+            .openConnection() as HttpURLConnection).apply {
+            connectTimeout = 15_000
+            readTimeout = 30_000
+            setRequestProperty("User-Agent", "BrightMarket")
+        }
+        val html = try {
+            if (page.responseCode !in 200..299) return null
+            page.inputStream.bufferedReader().readText()
+        } finally {
+            page.disconnect()
+        }
+
+        val href = Regex("""href="(/[^"]+\.apk)"""", RegexOption.IGNORE_CASE)
+            .find(html)?.groupValues?.get(1) ?: return null
+
+        val version = tag.removePrefix("v")
+        Resolved(
+            entry = entry,
+            version = version,
+            versionCode = versionCodeFromTag(version),
+            apkUrl = "https://github.com$href",
+            // Not on the page, and not worth a third request. Size is shown, not
+            // relied on; the installer reads the real length as it downloads.
+            size = 0L,
+            publishedAt = "",
+            notes = "",
+        )
+    }.getOrNull()
 
     // -----------------------------------------------------------------------
     // The cache. Its whole purpose is spending fewer of the sixty requests an

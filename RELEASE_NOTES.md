@@ -4,6 +4,27 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.21
+
+**Tracked apps no longer depend on GitHub's API budget.**
+
+v1.19 explained the "no APK release found" message properly and cut how often
+the app asks. It didn't fix the underlying problem, which is worse than it
+looked: GitHub allows 60 unauthenticated API requests an hour **per IP address**,
+and on a mobile network that address is shared with everyone else behind the same
+carrier NAT. The allowance can be gone before this phone has made a single
+request. That's why one tracked app could work and then all of them fail at once
+without you doing anything differently.
+
+So when the API refuses, the app now asks github.com instead, which has no such
+limit. It reads the same two things the API gave it — the newest release that
+isn't a prerelease, and the name of the APK attached to it — from the ordinary
+release pages. Checked against the eight apps this was reported with: all eight
+resolve, every one matching what the API says.
+
+You'll still see the rate limit message if both routes fail, which now means
+something is genuinely wrong rather than that you have several apps.
+
 ## v1.20
 
 **Room between Update and Uninstall.** There was supposed to be a gap. There
