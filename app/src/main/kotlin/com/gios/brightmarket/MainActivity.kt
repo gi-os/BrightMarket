@@ -30,6 +30,7 @@ import com.gios.brightmarket.install.Installer
 import com.gios.brightmarket.ui.*
 import com.gios.light.common.report.LightReport
 import com.gios.light.common.report.ReportOverlay
+import com.gios.light.common.report.Trouble
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -567,9 +568,23 @@ class MainActivity : ComponentActivity() {
                             is Tracked.Outcome.RateLimited -> {
                                 val mins = ((outcome.resetEpochSeconds * 1000 -
                                     System.currentTimeMillis()) / 60000).coerceAtLeast(1)
+                                // Both routes to GitHub are gone. Offer to report
+                                // it: the person who can fix it is not holding
+                                // this phone, and by the time they hear about it
+                                // the exact codes are the whole story.
+                                Trouble.record(
+                                    "check ${e.repo} for updates",
+                                    outcome.detail,
+                                )
                                 "GitHub rate limit — retry in ${mins}m"
                             }
-                            is Tracked.Outcome.Unreachable -> "couldn't reach GitHub"
+                            is Tracked.Outcome.Unreachable -> {
+                                Trouble.record(
+                                    "check ${e.repo} for updates",
+                                    outcome.detail,
+                                )
+                                "couldn't reach GitHub"
+                            }
                         },
                     )
                 }

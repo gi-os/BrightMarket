@@ -4,6 +4,22 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.22
+
+**If both routes to GitHub fail, the app offers to tell me.** Same chip as a
+crash — a small prompt in the corner, which you can ignore — and tapping it sends
+the exact reason rather than "it didn't work".
+
+The report carries the HTTP code, how much of the rate limit was left, when it
+resets, and precisely where the fallback gave up: whether the release page
+redirected somewhere unexpected, or the assets fragment 404'd, or no `.apk` was
+linked on it. Those are different problems with different fixes, and from the
+outside they look identical.
+
+It only asks when *both* the API and the plain web pages have failed, which
+after v1.21 should be close to never. One prompt per repo per hour, so an app
+that fails on every refresh doesn't nag you into turning reporting off.
+
 ## v1.21
 
 **Tracked apps no longer depend on GitHub's API budget.**

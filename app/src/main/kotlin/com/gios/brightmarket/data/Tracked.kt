@@ -150,9 +150,12 @@ object Tracked {
         data class Ok(val resolved: Resolved) : Outcome
         /** Reached GitHub; it genuinely has no published release with an APK. */
         object NoRelease : Outcome
-        /** Unauthenticated callers get 60 requests an hour, per IP. */
-        data class RateLimited(val resetEpochSeconds: Long) : Outcome
-        object Unreachable : Outcome
+        /**
+         * Unauthenticated callers get 60 requests an hour, per IP -- and on a
+         * carrier NAT that IP is shared, so this can happen having made none.
+         */
+        data class RateLimited(val resetEpochSeconds: Long, val detail: String) : Outcome
+        data class Unreachable(val detail: String) : Outcome
     }
 
     fun resolve(ctx: Context, entry: Entry, token: String? = null): Outcome {
@@ -187,24 +190,40 @@ object Tracked {
             if (code == 403 || code == 429) {
                 val remaining = conn.getHeaderField("X-RateLimit-Remaining")?.toLongOrNull()
                 val reset = conn.getHeaderField("X-RateLimit-Reset")?.toLongOrNull() ?: 0L
+                val limit = conn.getHeaderField("X-RateLimit-Limit") ?: "?"
 
                 // The API is spent, but github.com itself isn't rate limited at
                 // all. Ask it instead.
-                withoutApi(entry)?.let { resolved ->
+                val (resolved, fallbackNote) = withoutApi(entry)
+                if (resolved != null) {
                     val ok = Outcome.Ok(resolved)
                     store(ctx, entry.repo, Cached(null, System.currentTimeMillis(), ok))
                     return ok
                 }
 
+                // Both routes are gone. Everything known about why, in one line,
+                // because the person reading it will not have the phone.
+                val detail = "api HTTP $code, ratelimit $remaining/$limit reset=$reset; " +
+                    "web fallback: $fallbackNote"
                 val outcome =
-                    if (remaining == 0L) Outcome.RateLimited(reset) else Outcome.Unreachable
+                    if (remaining == 0L) Outcome.RateLimited(reset, detail)
+                    else Outcome.Unreachable(detail)
                 // Deliberately not cached as a result: being throttled says
                 // nothing about the repo, and caching it would outlive the
                 // throttle. The previous answer, if any, is kept instead.
                 return cached?.outcome ?: outcome
             }
 
-            if (code !in 200..299) return cached?.outcome ?: Outcome.Unreachable
+            if (code !in 200..299) {
+                val (resolved, fallbackNote) = withoutApi(entry)
+                if (resolved != null) {
+                    val ok = Outcome.Ok(resolved)
+                    store(ctx, entry.repo, Cached(null, System.currentTimeMillis(), ok))
+                    return ok
+                }
+                return cached?.outcome
+                    ?: Outcome.Unreachable("api HTTP $code; web fallback: $fallbackNote")
+            }
             val arr = JSONArray(conn.inputStream.bufferedReader().readText())
             for (i in 0 until arr.length()) {
                 val rel = arr.getJSONObject(i)
@@ -237,7 +256,8 @@ object Tracked {
         } catch (e: Exception) {
             // Offline, DNS, timeout. Says nothing about the repo, so an older
             // answer is better than replacing it with a wrong one.
-            cached?.outcome ?: Outcome.Unreachable
+            cached?.outcome
+                ?: Outcome.Unreachable("${e::class.java.simpleName}: ${e.message}")
         } finally {
             conn.disconnect()
         }
@@ -265,7 +285,7 @@ object Tracked {
      * Returns null rather than throwing: this is already the unhappy path, and
      * the caller has a real answer to fall back on.
      */
-    private fun withoutApi(entry: Entry): Resolved? = runCatching {
+    private fun withoutApi(entry: Entry): Pair<Resolved?, String> = runCatching {
         val latest = (URL("https://github.com/${entry.repo}/releases/latest")
             .openConnection() as HttpURLConnection).apply {
             instanceFollowRedirects = false
@@ -275,13 +295,17 @@ object Tracked {
             setRequestProperty("User-Agent", "BrightMarket")
         }
         val location = try {
-            if (latest.responseCode !in 300..399) return null
-            latest.getHeaderField("Location") ?: return null
+            if (latest.responseCode !in 300..399) {
+                return null to "releases/latest gave HTTP ${latest.responseCode}, expected a redirect"
+            }
+            latest.getHeaderField("Location")
+                ?: return null to "releases/latest redirected with no Location header"
         } finally {
             latest.disconnect()
         }
         // ".../releases/tag/v1.4.0"
-        val tag = location.substringAfterLast('/').takeIf { it.isNotBlank() } ?: return null
+        val tag = location.substringAfterLast('/').takeIf { it.isNotBlank() }
+            ?: return null to "no tag in redirect target '$location'"
 
         val page = (URL("https://github.com/${entry.repo}/releases/expanded_assets/$tag")
             .openConnection() as HttpURLConnection).apply {
@@ -290,14 +314,17 @@ object Tracked {
             setRequestProperty("User-Agent", "BrightMarket")
         }
         val html = try {
-            if (page.responseCode !in 200..299) return null
+            if (page.responseCode !in 200..299) {
+                return null to "expanded_assets/$tag gave HTTP ${page.responseCode}"
+            }
             page.inputStream.bufferedReader().readText()
         } finally {
             page.disconnect()
         }
 
         val href = Regex("""href="(/[^"]+\.apk)"""", RegexOption.IGNORE_CASE)
-            .find(html)?.groupValues?.get(1) ?: return null
+            .find(html)?.groupValues?.get(1)
+            ?: return null to "no .apk linked on $tag (${html.length} bytes read)"
 
         val version = tag.removePrefix("v")
         Resolved(
@@ -310,8 +337,8 @@ object Tracked {
             size = 0L,
             publishedAt = "",
             notes = "",
-        )
-    }.getOrNull()
+        ) to "ok"
+    }.getOrElse { null to "${it::class.java.simpleName}: ${it.message}" }
 
     // -----------------------------------------------------------------------
     // The cache. Its whole purpose is spending fewer of the sixty requests an
