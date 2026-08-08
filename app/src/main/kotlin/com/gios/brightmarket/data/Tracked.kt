@@ -109,6 +109,26 @@ object Tracked {
     }
 
     /**
+     * The last run of digits anywhere in a release tag.
+     *
+     * This used to be `tag.substringAfterLast('.')`, which assumes a
+     * dot-separated version and returns the whole tag when there isn't one.
+     * `build-70` came back as "build-70", parsed as null, and became 0 — so
+     * `updatable` was `0 > installed`, false forever. A tracked app on that tag
+     * scheme could never show an update, silently, and looked exactly like an
+     * app that was simply up to date.
+     *
+     * Not a cosmetic case: `build-NN` is what this whole portfolio's older CI
+     * emits. BrightMusic and BrightLibrary both use it.
+     *
+     * Returns 0 when a tag carries no digits at all, which is honest — there is
+     * nothing to compare — and leaves the app offering the install and letting
+     * Android refuse a downgrade.
+     */
+    fun versionCodeFromTag(tag: String): Long =
+        Regex("""\d+""").findAll(tag).lastOrNull()?.value?.toLongOrNull() ?: 0L
+
+    /**
      * Ask GitHub for a tracked repo's newest release.
      *
      * versionCode can't be read here the way the index does it — that needs the
@@ -142,7 +162,7 @@ object Tracked {
                 return Resolved(
                     entry = entry,
                     version = tag,
-                    versionCode = tag.substringAfterLast('.').toLongOrNull() ?: 0L,
+                    versionCode = versionCodeFromTag(tag),
                     apkUrl = apk.optString("browser_download_url"),
                     size = apk.optLong("size"),
                     publishedAt = rel.optString("published_at"),

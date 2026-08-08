@@ -455,4 +455,37 @@ class MarkdownTest {
         assertTrue(nightlyUpdates.first().target.nightly)
         assertEquals(20L, nightlyUpdates.first().target.versionCode)
     }
+
+    // -----------------------------------------------------------------------
+    // Tracked repos: reading a versionCode out of a release tag
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `versionCode is read from build-NN tags, not just dotted ones`() {
+        // The bug: substringAfterLast('.') returns the whole tag when there is
+        // no dot, so `build-70` parsed to null and became 0 -- and 0 is never
+        // greater than an installed versionCode, so the app could not offer an
+        // update for any repo on this tag scheme. BrightMusic and BrightLibrary
+        // both use it.
+        assertEquals(70L, Tracked.versionCodeFromTag("build-70"))
+        assertEquals(58L, Tracked.versionCodeFromTag("build-58"))
+    }
+
+    @Test
+    fun `dotted and prefixed tags still resolve to their last number`() {
+        assertEquals(34L, Tracked.versionCodeFromTag("v1.17.34"))
+        assertEquals(34L, Tracked.versionCodeFromTag("1.17.34"))
+        assertEquals(21L, Tracked.versionCodeFromTag("v1.2.0-build.21"))
+        assertEquals(32L, Tracked.versionCodeFromTag("nightly-1.15.32"))
+        assertEquals(2L, Tracked.versionCodeFromTag("v2"))
+    }
+
+    @Test
+    fun `a tag with no digits is zero rather than a guess`() {
+        // Nothing to compare against. Zero means "never claims to be newer",
+        // which leaves the install on offer and lets Android refuse a downgrade
+        // -- the honest outcome for a tag that says nothing.
+        assertEquals(0L, Tracked.versionCodeFromTag("release"))
+        assertEquals(0L, Tracked.versionCodeFromTag(""))
+    }
 }
