@@ -794,6 +794,18 @@ fun DetailScreen(
                 color = Light.ContentSecondary,
             )
 
+            // Credit where the app came from. No browser on the phone, so this
+            // is a line of text, not a link -- the full owner/repo is enough to
+            // find upstream from anywhere.
+            if (app.upstream.isNotBlank()) {
+                Spacer(Modifier.height(gridUnits(0.3f)))
+                Text(
+                    "Fork of github.com/${app.upstream}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Light.ContentSecondary,
+                )
+            }
+
             if (app.screenshots.isNotEmpty()) {
                 Spacer(Modifier.height(gridUnits(1.2f)))
                 ScreenshotStrip(app.screenshots)

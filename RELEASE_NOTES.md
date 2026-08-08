@@ -4,6 +4,15 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.19
+
+**Forks now credit their upstream.** The catalogue index carries an `upstream`
+field for every app that forks a community tool (BrightChat, BrightLibrary,
+BrightMusic, BrightNews, BrightTransit, LightKeyboard, Chirp), and the app's
+detail page shows a "Fork of github.com/owner/repo" line under the version.
+The browse site shows the same credit as a link. Original apps are unchanged --
+a blank field renders nothing.
+
 ## v1.14
 
 **Uninstall actually works.** It needed `REQUEST_DELETE_PACKAGES` in the

@@ -15,6 +15,11 @@ data class App(
     val repo: String,
     val category: String,
     val summary: String,
+    /**
+     * The community project this app forks, as "owner/repo". Blank for
+     * original apps; the detail page shows a credit line when present.
+     */
+    val upstream: String = "",
     val version: String,
     /**
      * The trailing segment of the release tag (v1.3.18 -> 18), which every
@@ -181,6 +186,7 @@ object Index {
                 repo = o.getString("repo"),
                 category = o.optString("category", "utilities"),
                 summary = o.optString("summary", ""),
+                upstream = o.optString("upstream", ""),
                 version = latest.getString("version"),
                 versionCode = latest.getLong("versionCode"),
                 apkUrl = latest.getString("apk"),
