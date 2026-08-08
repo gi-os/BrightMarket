@@ -137,17 +137,65 @@ object Tracked {
      * install and letting Android refuse a downgrade. Honest about being weaker
      * than the indexed path, which is part of why unlisted apps are marked.
      */
-    fun resolve(entry: Entry, token: String? = null): Resolved? {
+    /**
+     * What happened when we asked GitHub about a repo.
+     *
+     * This used to be a nullable Resolved, so "this repo publishes no APK",
+     * "GitHub is rate-limiting us" and "the phone is offline" were the same
+     * value — null — and the UI printed the first of those for all three. A
+     * user with ten tracked apps saw "no APK release found" against every one
+     * of them, none of which was true.
+     */
+    sealed interface Outcome {
+        data class Ok(val resolved: Resolved) : Outcome
+        /** Reached GitHub; it genuinely has no published release with an APK. */
+        object NoRelease : Outcome
+        /** Unauthenticated callers get 60 requests an hour, per IP. */
+        data class RateLimited(val resetEpochSeconds: Long) : Outcome
+        object Unreachable : Outcome
+    }
+
+    fun resolve(ctx: Context, entry: Entry, token: String? = null): Outcome {
+        val cached = cacheFor(ctx, entry.repo)
+        // Nothing changes minute to minute, and every request spends a sixtieth
+        // of the hourly allowance. A repo checked recently is not checked again.
+        if (cached != null && System.currentTimeMillis() - cached.checkedAt < FRESH_FOR_MS) {
+            return cached.outcome
+        }
+
         val conn = (URL("https://api.github.com/repos/${entry.repo}/releases?per_page=10")
             .openConnection() as HttpURLConnection).apply {
             connectTimeout = 15_000
             readTimeout = 30_000
             setRequestProperty("Accept", "application/vnd.github+json")
             setRequestProperty("User-Agent", "BrightMarket")
+            // A 304 does not count against the rate limit at all, so asking
+            // "has this changed?" is free where asking "what is it?" is not.
+            cached?.etag?.let { setRequestProperty("If-None-Match", it) }
             token?.let { setRequestProperty("Authorization", "Bearer $it") }
         }
         return try {
-            if (conn.responseCode !in 200..299) return null
+            val code = conn.responseCode
+
+            if (code == 304 && cached != null) {
+                store(ctx, entry.repo, cached.copy(checkedAt = System.currentTimeMillis()))
+                return cached.outcome
+            }
+
+            // 403 and 429 both carry the remaining count. Zero means the hour is
+            // spent; anything else is a different refusal.
+            if (code == 403 || code == 429) {
+                val remaining = conn.getHeaderField("X-RateLimit-Remaining")?.toLongOrNull()
+                val reset = conn.getHeaderField("X-RateLimit-Reset")?.toLongOrNull() ?: 0L
+                val outcome =
+                    if (remaining == 0L) Outcome.RateLimited(reset) else Outcome.Unreachable
+                // Deliberately not cached as a result: being throttled says
+                // nothing about the repo, and caching it would outlive the
+                // throttle. The previous answer, if any, is kept instead.
+                return cached?.outcome ?: outcome
+            }
+
+            if (code !in 200..299) return cached?.outcome ?: Outcome.Unreachable
             val arr = JSONArray(conn.inputStream.bufferedReader().readText())
             for (i in 0 until arr.length()) {
                 val rel = arr.getJSONObject(i)
@@ -159,22 +207,89 @@ object Tracked {
                     ?: continue
 
                 val tag = rel.optString("tag_name").removePrefix("v")
-                return Resolved(
-                    entry = entry,
-                    version = tag,
-                    versionCode = versionCodeFromTag(tag),
-                    apkUrl = apk.optString("browser_download_url"),
-                    size = apk.optLong("size"),
-                    publishedAt = rel.optString("published_at"),
-                    notes = rel.optString("body").take(4000),
+                val ok = Outcome.Ok(
+                    Resolved(
+                        entry = entry,
+                        version = tag,
+                        versionCode = versionCodeFromTag(tag),
+                        apkUrl = apk.optString("browser_download_url"),
+                        size = apk.optLong("size"),
+                        publishedAt = rel.optString("published_at"),
+                        notes = rel.optString("body").take(4000),
+                    )
                 )
+                store(ctx, entry.repo, Cached(conn.getHeaderField("ETag"), System.currentTimeMillis(), ok))
+                return ok
             }
-            null
+            // Reached GitHub, read the whole list, found no APK. The one case
+            // where "no APK release found" is a true statement.
+            store(ctx, entry.repo, Cached(conn.getHeaderField("ETag"), System.currentTimeMillis(), Outcome.NoRelease))
+            Outcome.NoRelease
         } catch (e: Exception) {
-            null
+            // Offline, DNS, timeout. Says nothing about the repo, so an older
+            // answer is better than replacing it with a wrong one.
+            cached?.outcome ?: Outcome.Unreachable
         } finally {
             conn.disconnect()
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // The cache. Its whole purpose is spending fewer of the sixty requests an
+    // hour that an unauthenticated caller gets -- shared across every tracked
+    // repo, and refreshTracked() asks about all of them at once.
+    // -----------------------------------------------------------------------
+
+    private const val FRESH_FOR_MS = 30 * 60 * 1000L
+    private const val CACHE = "tracked_cache"
+
+    private data class Cached(val etag: String?, val checkedAt: Long, val outcome: Outcome)
+
+    private fun cacheFor(ctx: Context, repo: String): Cached? {
+        val raw = ctx.getSharedPreferences(CACHE, Context.MODE_PRIVATE).getString(repo, null)
+            ?: return null
+        return runCatching {
+            val o = JSONObject(raw)
+            val outcome = when (o.getString("kind")) {
+                "ok" -> Outcome.Ok(
+                    Resolved(
+                        entry = Entry(repo = repo),
+                        version = o.getString("version"),
+                        versionCode = o.getLong("versionCode"),
+                        apkUrl = o.getString("apkUrl"),
+                        size = o.optLong("size"),
+                        publishedAt = o.optString("publishedAt"),
+                        notes = o.optString("notes"),
+                    )
+                )
+                "none" -> Outcome.NoRelease
+                else -> return null
+            }
+            Cached(o.optString("etag").takeIf { it.isNotBlank() }, o.optLong("checkedAt"), outcome)
+        }.getOrNull()
+    }
+
+    private fun store(ctx: Context, repo: String, cached: Cached) {
+        val o = JSONObject().apply {
+            cached.etag?.let { put("etag", it) }
+            put("checkedAt", cached.checkedAt)
+            when (val r = cached.outcome) {
+                is Outcome.Ok -> {
+                    put("kind", "ok")
+                    put("version", r.resolved.version)
+                    put("versionCode", r.resolved.versionCode)
+                    put("apkUrl", r.resolved.apkUrl)
+                    put("size", r.resolved.size)
+                    put("publishedAt", r.resolved.publishedAt)
+                    put("notes", r.resolved.notes)
+                }
+                // Only a definite answer is worth remembering. A throttle or a
+                // dropped connection is about us, not the repo.
+                Outcome.NoRelease -> put("kind", "none")
+                else -> return
+            }
+        }
+        ctx.getSharedPreferences(CACHE, Context.MODE_PRIVATE).edit().putString(repo, o.toString()).apply()
     }
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

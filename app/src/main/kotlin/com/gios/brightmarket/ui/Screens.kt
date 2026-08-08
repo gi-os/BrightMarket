@@ -658,6 +658,8 @@ data class TrackedRow(
     val apkUrl: String?,
     val installedVersionCode: Long?,
     val versionCode: Long?,
+    /** Why there is no version, when there isn't one. Null when all is well. */
+    val status: String? = null,
 ) {
     val updatable: Boolean
         get() = versionCode != null && installedVersionCode != null &&
@@ -691,7 +693,9 @@ private fun TrackedRowView(
                 progress is Installer.Progress.Downloading -> "Downloading…"
                 progress is Installer.Progress.AwaitingConfirmation -> "Confirm the install…"
                 progress is Installer.Progress.Failed -> progress.reason
-                row.apkUrl == null -> "${row.repo} · no APK release found"
+                // Was "no APK release found" for every failure, including the
+                // ones that say nothing about the repo at all.
+                row.status != null -> "${row.repo} · ${row.status}"
                 row.updatable -> "${row.repo} · update to ${row.version}"
                 row.installedVersionCode != null -> "${row.repo} · ${row.version}"
                 else -> "${row.repo} · ${row.version} · not installed"

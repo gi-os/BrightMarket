@@ -548,7 +548,8 @@ class MainActivity : ComponentActivity() {
             val entries = Tracked.all(this@MainActivity)
             val rows = withContext(Dispatchers.IO) {
                 entries.map { e ->
-                    val resolved = Tracked.resolve(e)
+                    val outcome = Tracked.resolve(this@MainActivity, e)
+                    val resolved = (outcome as? Tracked.Outcome.Ok)?.resolved
                     val pkg = e.pkg ?: resolved?.entry?.pkg
                     TrackedRow(
                         repo = e.repo,
@@ -560,6 +561,16 @@ class MainActivity : ComponentActivity() {
                             Installer.installedVersionCode(this@MainActivity, it)
                         },
                         versionCode = resolved?.versionCode,
+                        status = when (outcome) {
+                            is Tracked.Outcome.Ok -> null
+                            is Tracked.Outcome.NoRelease -> "no APK in its releases"
+                            is Tracked.Outcome.RateLimited -> {
+                                val mins = ((outcome.resetEpochSeconds * 1000 -
+                                    System.currentTimeMillis()) / 60000).coerceAtLeast(1)
+                                "GitHub rate limit — retry in ${mins}m"
+                            }
+                            is Tracked.Outcome.Unreachable -> "couldn't reach GitHub"
+                        },
                     )
                 }
             }
