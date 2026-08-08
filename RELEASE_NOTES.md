@@ -4,6 +4,19 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.20
+
+**Room between Update and Uninstall.** There was supposed to be a gap. There
+wasn't: the uninstall's own top padding is part of its tap target, and it
+extended upward through almost the whole spacer, leaving about 1dp of clear
+space between "update this app" and "remove it". Android asks for at least 8.
+
+Now there's a wide gap, a short rule to mark uninstall as a different kind of
+thing, and another gap — about 38dp of clear space, and no top padding on the
+target so it can't creep back up into it. Update also got a proper tap target of
+its own; it was the bare height of the letters, which is a strange thing for the
+button you actually came to press.
+
 ## v1.19
 
 **Forks now credit their upstream.** The catalogue index carries an `upstream`

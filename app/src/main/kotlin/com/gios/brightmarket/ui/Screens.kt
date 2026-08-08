@@ -24,6 +24,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import com.gios.brightmarket.data.App
 import com.gios.brightmarket.data.Installed
 import com.gios.brightmarket.data.Sort
@@ -833,7 +834,11 @@ fun DetailScreen(
                 text = label.uppercase(),
                 style = MaterialTheme.typography.labelLarge,
                 color = if (enabled) Light.Content else Light.ContentSecondary,
-                modifier = Modifier.lightClickable(enabled = enabled, onClick = onInstall),
+                // The one you came here to press, so it gets a real target
+                // rather than the bare glyph box it had.
+                modifier = Modifier
+                    .lightClickable(enabled = enabled, onClick = onInstall)
+                    .padding(vertical = gridUnits(0.4f), horizontal = gridUnits(0.1f)),
             )
 
             if (progress is Installer.Progress.Downloading && progress.total > 0) {
@@ -869,20 +874,37 @@ fun DetailScreen(
             }
 
             // Only once it is actually on the phone, and never for BrightMarket
-            // itself. `detail` rather than `button` weight: it belongs on the
-            // page but should not compete with Install for the eye.
+            // itself.
             if (installedVersionCode != null && !isSelf && progress == null) {
-                Spacer(Modifier.height(gridUnits(0.6f)))
+                // There was 0.6 units of spacer here and 0.5 of it was eaten by
+                // the uninstall's own top padding, which extends its tap target
+                // upwards -- leaving about 1dp of real gap between "update" and
+                // "remove this app", against the 8dp Android asks for. Hence the
+                // fat-finger.
+                //
+                // Now: a wide gap, a rule to say this is a different kind of
+                // thing, another gap, and no top padding on the target so it
+                // cannot creep back up into the space.
+                Spacer(Modifier.height(gridUnits(1.6f)))
+                Canvas(Modifier.fillMaxWidth(0.35f).height(1.dp)) {
+                    drawLine(
+                        color = Light.ContentSecondary,
+                        start = Offset(0f, size.height / 2),
+                        end = Offset(size.width, size.height / 2),
+                        strokeWidth = size.height,
+                    )
+                }
+                Spacer(Modifier.height(gridUnits(1.2f)))
                 Text(
                     "UNINSTALL",
-                    // labelLarge, matching INSTALL. It is the same kind of act
-                    // and needs the same target; kept in secondary colour so it
-                    // still doesn't compete for the eye.
                     style = MaterialTheme.typography.labelLarge,
                     color = Light.ContentSecondary,
                     modifier = Modifier
                         .lightClickable(onClick = onUninstall)
-                        .padding(top = gridUnits(0.5f), bottom = gridUnits(0.5f), end = gridUnits(2f)),
+                        // No top padding, on purpose: padding inside the
+                        // clickable is part of what you can hit, and upwards is
+                        // exactly where it must not grow.
+                        .padding(bottom = gridUnits(0.6f), end = gridUnits(2f)),
                 )
             }
 
