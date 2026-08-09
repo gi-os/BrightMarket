@@ -129,6 +129,73 @@ object Tracked {
         Regex("""\d+""").findAll(tag).lastOrNull()?.value?.toLongOrNull() ?: 0L
 
     /**
+     * Choose which asset is "the" APK when a release publishes more than one.
+     *
+     * This is not a hypothetical. Obtainium's own releases ship nine: three
+     * ABI splits, a "-fdroid-" flavor of each, and a universal build -- and
+     * the F-Droid flavor is a **different applicationId**
+     * (`dev.imranr.obtainium.fdroid` vs `dev.imranr.obtainium`), not just a
+     * different build of the same app. `firstOrNull` over the raw asset list
+     * took whichever GitHub happened to upload first, which is unspecified
+     * and can change release to release. The day it picked the fdroid variant
+     * while this phone's Obtainium -- and this repo's own cached applicationId
+     * -- was the regular one, `Installer.install` was asked to write a
+     * `dev.imranr.obtainium.fdroid` archive into a session opened for
+     * `dev.imranr.obtainium`. Android notices that mismatch and refuses with
+     * `INSTALL_FAILED_INVALID_APK`, which names nothing -- it looks exactly
+     * like a corrupt download, and the file (checked byte-for-byte against
+     * its own published sha256) was not corrupt at all.
+     *
+     * Preference order, cheapest signal first, all from the filename alone
+     * (nothing here has been downloaded yet):
+     *  1. Skip anything naming a flavor that exists specifically to be a
+     *     *different* build for a *different* distributor -- "fdroid" is the
+     *     one seen in the wild, so it is the one handled by name. A repo that
+     *     publishes only flavored builds still gets one, via the fallback.
+     *  2. Skip anything naming a specific ABI. A universal build installs
+     *     everywhere; an ABI split installs only on a matching device, and
+     *     nothing here knows the device's ABI to match it correctly, so the
+     *     safe move is to prefer not needing to.
+     *  3. Prefer the larger file. A universal build bundles every ABI's native
+     *     code, so it is reliably the biggest asset in a split release -- an
+     *     ordering that needs no ABI knowledge at all.
+     *  4. If every candidate got skipped by 1 or 2 (a release with only
+     *     flavored or only split builds), fall back to the first one rather
+     *     than returning nothing -- a flavor-swapped app is still an app;
+     *     Installer.install's own mismatch check is what actually protects
+     *     against a wrong pick surviving all the way to an install.
+     */
+    fun pickApk(assets: List<JSONObject>): JSONObject? {
+        val apks = assets.filter { it.optString("name").endsWith(".apk", ignoreCase = true) }
+        if (apks.isEmpty()) return null
+        val abiNames = listOf("arm64-v8a", "armeabi-v7a", "armeabi", "x86_64", "x86")
+        fun isFlavored(name: String) = name.contains("fdroid", ignoreCase = true)
+        fun isAbiSplit(name: String) = abiNames.any { name.contains(it, ignoreCase = true) }
+
+        val plain = apks.filterNot { isFlavored(it.optString("name")) }
+            .filterNot { isAbiSplit(it.optString("name")) }
+        val candidates = plain.ifEmpty { apks }
+        return candidates.maxByOrNull { it.optLong("size") }
+    }
+
+    /**
+     * [pickApk]'s logic for a list of hrefs instead of asset JSON -- the shape
+     * [withoutApi] has to work with, since the web fallback has no size field
+     * to prefer by. Filename-only, same flavor/ABI avoidance, first-remaining
+     * as the tiebreak instead of largest.
+     */
+    fun pickApkHref(hrefs: List<String>): String? {
+        if (hrefs.isEmpty()) return null
+        val abiNames = listOf("arm64-v8a", "armeabi-v7a", "armeabi", "x86_64", "x86")
+        fun name(href: String) = href.substringAfterLast('/')
+        fun isFlavored(href: String) = name(href).contains("fdroid", ignoreCase = true)
+        fun isAbiSplit(href: String) = abiNames.any { name(href).contains(it, ignoreCase = true) }
+
+        val plain = hrefs.filterNot { isFlavored(it) }.filterNot { isAbiSplit(it) }
+        return plain.firstOrNull() ?: hrefs.first()
+    }
+
+    /**
      * Ask GitHub for a tracked repo's newest release.
      *
      * versionCode can't be read here the way the index does it — that needs the
@@ -229,9 +296,7 @@ object Tracked {
                 val rel = arr.getJSONObject(i)
                 if (rel.optBoolean("draft") || rel.optBoolean("prerelease")) continue
                 val assets = rel.optJSONArray("assets") ?: continue
-                val apk = (0 until assets.length())
-                    .map { assets.getJSONObject(it) }
-                    .firstOrNull { it.optString("name").endsWith(".apk", ignoreCase = true) }
+                val apk = pickApk((0 until assets.length()).map { assets.getJSONObject(it) })
                     ?: continue
 
                 val tag = rel.optString("tag_name").removePrefix("v")
@@ -322,8 +387,13 @@ object Tracked {
             page.disconnect()
         }
 
-        val href = Regex("""href="(/[^"]+\.apk)"""", RegexOption.IGNORE_CASE)
-            .find(html)?.groupValues?.get(1)
+        // Same multi-asset problem as the API path (see pickApk) but blinder:
+        // this page names files, not bytes, so there is no size to break a tie
+        // with. Filename-only preference is still strictly better than "first
+        // link on the page", which is upload order and not a choice anyone made.
+        val hrefs = Regex("""href="(/[^"]+\.apk)"""", RegexOption.IGNORE_CASE)
+            .findAll(html).map { it.groupValues[1] }.toList()
+        val href = pickApkHref(hrefs)
             ?: return null to "no .apk linked on $tag (${html.length} bytes read)"
 
         val version = tag.removePrefix("v")

@@ -488,4 +488,77 @@ class MarkdownTest {
         assertEquals(0L, Tracked.versionCodeFromTag("release"))
         assertEquals(0L, Tracked.versionCodeFromTag(""))
     }
+
+    // -----------------------------------------------------------------------
+    // Tracked repos: picking the right asset out of a multi-APK release
+    // -----------------------------------------------------------------------
+
+    private fun asset(name: String, size: Long) = org.json.JSONObject().apply {
+        put("name", name)
+        put("size", size)
+        put("browser_download_url", "https://example/$name")
+    }
+
+    @Test
+    fun `pickApk skips fdroid and ABI splits in favour of the universal build`() {
+        // Obtainium's real v1.6.11 asset list, minus the .idsig and .sha256
+        // siblings that pickApk never sees (Tracked.resolve filters to .apk
+        // first). The universal build is also the largest, so this exercises
+        // both preferences at once; the ABI-only test below isolates the
+        // second in case the two ever disagree.
+        val assets = listOf(
+            asset("app-arm64-v8a-fdroid-release.apk", 26_117_325),
+            asset("app-arm64-v8a-release.apk", 26_117_325),
+            asset("app-armeabi-v7a-fdroid-release.apk", 24_204_501),
+            asset("app-armeabi-v7a-release.apk", 24_204_501),
+            asset("app-fdroid-release.apk", 70_092_587),
+            asset("app-release.apk", 70_092_587),
+            asset("app-x86_64-fdroid-release.apk", 27_641_025),
+            asset("app-x86_64-release.apk", 27_641_025),
+        )
+        assertEquals("app-release.apk", Tracked.pickApk(assets)?.optString("name"))
+    }
+
+    @Test
+    fun `pickApk prefers no ABI qualifier even when an ABI build is bigger`() {
+        val assets = listOf(
+            asset("app-arm64-v8a-release.apk", 90_000_000),
+            asset("app-universal-release.apk", 40_000_000),
+        )
+        assertEquals("app-universal-release.apk", Tracked.pickApk(assets)?.optString("name"))
+    }
+
+    @Test
+    fun `pickApk falls back rather than returning nothing when every asset is flavored`() {
+        val assets = listOf(
+            asset("app-arm64-v8a-fdroid-release.apk", 100),
+            asset("app-armeabi-v7a-fdroid-release.apk", 90),
+        )
+        assertNotNull(Tracked.pickApk(assets))
+    }
+
+    @Test
+    fun `pickApk returns null when there is no apk asset at all`() {
+        val assets = listOf(asset("checksums.txt", 10).apply { put("name", "checksums.txt") })
+        assertNull(Tracked.pickApk(assets))
+    }
+
+    @Test
+    fun `pickApkHref applies the same preference to the web-fallback link list`() {
+        val hrefs = listOf(
+            "/ImranR98/Obtainium/releases/download/v1.6.11/app-arm64-v8a-fdroid-release.apk",
+            "/ImranR98/Obtainium/releases/download/v1.6.11/app-arm64-v8a-release.apk",
+            "/ImranR98/Obtainium/releases/download/v1.6.11/app-armeabi-v7a-fdroid-release.apk",
+            "/ImranR98/Obtainium/releases/download/v1.6.11/app-armeabi-v7a-release.apk",
+            "/ImranR98/Obtainium/releases/download/v1.6.11/app-fdroid-release.apk",
+            "/ImranR98/Obtainium/releases/download/v1.6.11/app-release.apk",
+            "/ImranR98/Obtainium/releases/download/v1.6.11/app-x86_64-fdroid-release.apk",
+            "/ImranR98/Obtainium/releases/download/v1.6.11/app-x86_64-release.apk",
+        )
+        assertEquals(
+            "/ImranR98/Obtainium/releases/download/v1.6.11/app-release.apk",
+            Tracked.pickApkHref(hrefs),
+        )
+    }
 }
+

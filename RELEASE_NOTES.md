@@ -4,7 +4,32 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.23
+
+**Tracked apps that publish more than one APK could try to install the wrong
+one — and Android's error for it names nothing.**
+
+Obtainium (tracked because it isn't in the catalogue) ships nine assets per
+release: three CPU-architecture builds, an F-Droid-flavored copy of each, and
+a universal build. The F-Droid one isn't just a different build — it's a
+different app, `dev.imranr.obtainium.fdroid` instead of `dev.imranr.obtainium`.
+BrightMarket was taking whichever `.apk` GitHub happened to list first, which
+is upload order and not something anyone chose. When that landed on the
+F-Droid build while the phone already had the regular one, the install session
+was opened for one app and handed another. Android notices and refuses —
+as `INSTALL_FAILED_INVALID_APK`, which reads exactly like a corrupt download.
+It wasn't: the file matched its own published checksum byte for byte.
+
+Picking an asset out of a multi-APK release now prefers, in order: not an
+F-Droid-style flavor build, not a CPU-specific split, and the largest file if
+there's still a tie — which lands on the universal build every time, the same
+one most people would pick by hand. And if a mismatch like this ever happens
+again anyway, for this repo or a new one, the install now stops before
+touching the installer at all and says which two applicationIds it saw,
+instead of leaving Android's string to be mistaken for a bad download.
+
 ## v1.22
+
 
 **If both routes to GitHub fail, the app offers to tell me.** Same chip as a
 crash — a small prompt in the corner, which you can ignore — and tapping it sends

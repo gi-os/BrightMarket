@@ -123,6 +123,26 @@ object Installer {
                 error("That download isn't a readable Android package. It may have arrived incomplete — try again.")
             }
 
+            // `pkg` non-blank means the caller already believes this download
+            // is a specific app -- a tracked repo whose applicationId was
+            // learned on an earlier install. If the APK actually on disk is a
+            // different one, committing anyway asks PackageInstaller to open a
+            // session for one app and hand it another; Android notices and
+            // refuses with INSTALL_FAILED_INVALID_APK, a string that names
+            // nothing and looks exactly like a corrupt file. It happened for
+            // real: a repo can publish more than one installable APK in a
+            // single release (Obtainium ships a "-fdroid-" flavored build
+            // alongside the regular one, under a different applicationId
+            // entirely), and asset order is not guaranteed stable release to
+            // release. Catching the mismatch here turns that into a message
+            // that says what actually happened.
+            if (pkg.isNotBlank() && identity.first != pkg) {
+                error(
+                    "This release is a different app (${identity.first}) than the one being " +
+                        "tracked ($pkg). Forget it and add it again to switch to the new one."
+                )
+            }
+
             onProgress(Progress.AwaitingConfirmation)
             commitSession(ctx, apk, pkg.ifBlank { identity.first })
             apk.delete()
