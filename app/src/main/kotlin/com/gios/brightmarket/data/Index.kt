@@ -22,10 +22,13 @@ data class App(
     val upstream: String = "",
     val version: String,
     /**
-     * The trailing segment of the release tag (v1.3.18 -> 18), which every
-     * Bright app's CI stamps from its run number. This is compared against
-     * PackageManager's longVersionCode to decide "update available" -- it is
-     * NOT the human-facing version string.
+     * The real versionCode, read out of the APK by the index builder -- not
+     * derived from the tag. Its source says so plainly: "this is the
+     * authoritative source and the tag is not", precisely because a trailing
+     * tag segment goes backwards on a minor bump (1.2.2 -> 2, then 1.3.0 -> 0).
+     *
+     * Compared against PackageManager's longVersionCode to decide "update
+     * available". It is NOT the human-facing version string.
      */
     val versionCode: Long,
     val apkUrl: String,
@@ -120,6 +123,9 @@ data class Installed(
             installedByMarket = installedByMarket,
             remoteVersion = target.version,
             remoteVersionCode = target.versionCode,
+            // The index builder downloads the APK and reads this number out of
+            // it, on purpose, so it can be compared against PackageManager's.
+            remoteVersionCodeIsReal = true,
         )
 }
 
@@ -143,12 +149,15 @@ object Index {
      * nothing on screen for the apps BrightMarket actually indexes — which read
      * as the import having skipped them.
      *
-     * Comparison used to be versionCode only, on the reasoning that names are
-     * marketing strings while every Bright app's CI stamps versionCode from its
-     * monotonic run number. True for the Bright fleet, and wrong for everyone
-     * else: the index's versionCode is the *trailing digits of the tag*, so an
-     * app on ordinary semantic versioning going v1.2.10 -> v1.3.0 compared 0
-     * against 10 and reported no update, forever, silently. See [Version].
+     * Comparison is on versionCode, and for indexed apps that is the right
+     * answer: the builder reads the real number out of the APK so it can be
+     * compared against the real number PackageManager reports. Names are
+     * marketing strings, and for a fork they are upstream's -- BrightMusic
+     * ships tag `build-131` over a versionName of its own, and reading a
+     * difference between those two invents an update on every release.
+     *
+     * The tracked-repo path has no such number and needs [Version]'s layered
+     * rule instead.
      */
     fun partitionInstalled(
         apps: List<App>,

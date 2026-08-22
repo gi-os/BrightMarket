@@ -683,6 +683,9 @@ data class TrackedRow(
             installedByMarket = installedByMarket,
             remoteVersion = version,
             remoteVersionCode = versionCode ?: 0L,
+            // Guessed from the digits in the tag: nothing here has parsed the
+            // APK, so this number is a hint rather than an answer.
+            remoteVersionCodeIsReal = false,
         )
 }
 

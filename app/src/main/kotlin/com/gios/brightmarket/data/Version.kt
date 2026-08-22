@@ -97,8 +97,24 @@ object Version {
         installedByMarket: String?,
         remoteVersion: String?,
         remoteVersionCode: Long,
+        /**
+         * Whether [remoteVersionCode] was read out of the APK itself.
+         *
+         * True for indexed apps: the index builder downloads the APK and reads the real number,
+         * precisely so the client can compare it against PackageManager's longVersionCode. Its
+         * own source says "this is the authoritative source and the tag is not". When that is
+         * what we have, it settles the question outright and nothing below is needed — comparing
+         * a `build-131` tag against an upstream fork's versionName only invents disagreements.
+         *
+         * False for a tracked repo, where nothing has parsed the APK and the number is guessed
+         * from the digits in the tag.
+         */
+        remoteVersionCodeIsReal: Boolean,
     ): Boolean {
         val remote = normalize(remoteVersion) ?: return false
+
+        // The real thing, compared against the real thing. Both directions.
+        if (remoteVersionCodeIsReal) return remoteVersionCode > installedVersionCode
 
         // 1. Exact: both strings came from a release tag, so they are the same
         //    kind of thing and inequality means a different release.
@@ -116,14 +132,41 @@ object Version {
         val installed = normalize(installedVersionName)
         compareNumeric(remote, installed)?.let { return it > 0 }
 
-        // 3. Not comparable as numbers. The original rule gets its say here,
-        //    where it can only ever add an update rather than assert a bad one.
-        if (remoteVersionCode > installedVersionCode) return true
+        // 3. Same shape, different numbers — `build-70` against `build-71`. Also
+        //    decisive both ways, and it is what stops a tag scheme the numeric
+        //    reader cannot parse from being treated as unknowable.
+        compareSameShape(remote, installed)?.let { return it > 0 }
 
-        // 4. Different strings mean a different release. Offer it: a needless
-        //    reinstall costs a download, a missed update costs the whole point
-        //    of the app.
-        if (installed == null) return false
-        return remote != installed
+        // 4. The strings share nothing, so their difference means nothing: a
+        //    `build-131` tag and a fork's own `1.6.0` versionName disagree on
+        //    every release including the one you already have. Only the code is
+        //    left to go on, and equal codes mean the same build.
+        return remoteVersionCode > installedVersionCode
     }
+
+    /**
+     * Compare two versions that share a shape but not their numbers.
+     *
+     * Null unless the non-digit skeletons match exactly, which is the test for "these two came
+     * out of the same scheme". `build-70` and `build-71` do. `build-131` and `1.6.0` do not, and
+     * that is the point — reading a difference between those two says nothing about which is
+     * newer, because they were never the same kind of string.
+     */
+    fun compareSameShape(a: String?, b: String?): Int? {
+        if (a == null || b == null) return null
+        if (skeleton(a) != skeleton(b)) return null
+        val left = digitRuns(a)
+        val right = digitRuns(b)
+        if (left.isEmpty() || left.size != right.size) return null
+        for (i in left.indices) {
+            if (left[i] != right[i]) return left[i].compareTo(right[i])
+        }
+        return 0
+    }
+
+    private fun skeleton(s: String) = DIGITS.replace(s, "#")
+
+    private fun digitRuns(s: String) = DIGITS.findAll(s).mapNotNull { it.value.toLongOrNull() }.toList()
+
+    private val DIGITS = Regex("""\d+""")
 }

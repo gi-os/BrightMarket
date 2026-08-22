@@ -10,12 +10,95 @@ import org.junit.Test
 /**
  * Deciding that a release is newer than what is installed.
  *
- * The bug these exist for: comparing a synthesized "versionCode" — the trailing
- * digits of a tag — against the real installed one. It works for the Bright
- * fleet by coincidence of how its CI stamps builds, and silently reports "up to
- * date" forever for everything else.
+ * Two different situations, and the difference is the whole design.
+ *
+ * An **indexed** app carries a versionCode the index builder read out of the
+ * APK itself. It is the same kind of number PackageManager reports, so it
+ * settles the question outright and nothing else gets a vote.
+ *
+ * A **tracked** repo has no such number. Nothing parsed its APK, so the code is
+ * guessed from the digits in the tag, and for anything but a monotonic run
+ * number that guess is noise. Those cases fall through to the layered rule, and
+ * are what most of these tests cover — hence `remoteVersionCodeIsReal = false`
+ * nearly everywhere below.
  */
 class VersionTest {
+
+    // ---- indexed apps: the real number decides ------------------------------
+
+    @Test
+    fun `a real versionCode settles it, whatever the strings say`() {
+        // BrightMusic. The tag is `build-131` and the versionName belongs to the
+        // upstream fork, so the two strings disagree on every release including
+        // the one already installed. Reading that as an update offered a
+        // permanent update to the version you were already on.
+        assertFalse(
+            Version.updateAvailable(
+                installedVersionName = "1.6.0",
+                installedVersionCode = 131,
+                installedByMarket = null,
+                remoteVersion = "build-131",
+                remoteVersionCode = 131,
+                remoteVersionCodeIsReal = true,
+            ),
+        )
+        assertTrue(
+            Version.updateAvailable(
+                installedVersionName = "1.6.0",
+                installedVersionCode = 131,
+                installedByMarket = null,
+                remoteVersion = "build-132",
+                remoteVersionCode = 132,
+                remoteVersionCodeIsReal = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `a real versionCode also refuses a downgrade`() {
+        assertFalse(
+            Version.updateAvailable(
+                installedVersionName = "1.6.0",
+                installedVersionCode = 131,
+                installedByMarket = null,
+                remoteVersion = "build-130",
+                remoteVersionCode = 130,
+                remoteVersionCodeIsReal = true,
+            ),
+        )
+    }
+
+    // ---- tracked repos: same shape, different numbers -----------------------
+
+    @Test
+    fun `a build tag against a fork's own versionName is not an update`() {
+        // Same trap as BrightMusic, on the tracked path where the code is only a
+        // guess. Equal codes are the only evidence available, and they agree.
+        assertFalse(
+            Version.updateAvailable(
+                installedVersionName = "1.6.0",
+                installedVersionCode = 131,
+                installedByMarket = null,
+                remoteVersion = "build-131",
+                remoteVersionCode = 131,
+                remoteVersionCodeIsReal = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `build tags that share a shape compare on their numbers`() {
+        assertTrue(Version.compareSameShape("build-71", "build-70")!! > 0)
+        assertTrue(Version.compareSameShape("build-70", "build-71")!! < 0)
+        assertEquals(0, Version.compareSameShape("build-70", "build-70"))
+    }
+
+    @Test
+    fun `versions from different schemes share no shape`() {
+        // The point of the shape test: these two were never the same kind of
+        // string, so their difference says nothing about which is newer.
+        assertNull(Version.compareSameShape("build-131", "1.6.0"))
+    }
 
     // ---- the bug -----------------------------------------------------------
 
@@ -29,6 +112,7 @@ class VersionTest {
                 installedVersionCode = 10,
                 installedByMarket = null,
                 remoteVersion = "v1.3.0",
+                remoteVersionCodeIsReal = false,
                 remoteVersionCode = 0,
             ),
         )
@@ -42,6 +126,7 @@ class VersionTest {
                 installedVersionCode = 30,
                 installedByMarket = null,
                 remoteVersion = "2026.08.01",
+                remoteVersionCodeIsReal = false,
                 remoteVersionCode = 1,
             ),
         )
@@ -58,6 +143,7 @@ class VersionTest {
                 installedVersionCode = 102,
                 installedByMarket = null,
                 remoteVersion = "3.0.104",
+                remoteVersionCodeIsReal = false,
                 remoteVersionCode = 104,
             ),
         )
@@ -67,6 +153,7 @@ class VersionTest {
                 installedVersionCode = 104,
                 installedByMarket = null,
                 remoteVersion = "3.0.104",
+                remoteVersionCodeIsReal = false,
                 remoteVersionCode = 104,
             ),
         )
@@ -80,6 +167,7 @@ class VersionTest {
                 installedVersionCode = 42,
                 installedByMarket = null,
                 remoteVersion = "v1.4.2",
+                remoteVersionCodeIsReal = false,
                 remoteVersionCode = 2,
             ),
         )
@@ -95,6 +183,7 @@ class VersionTest {
                 installedVersionCode = 0,
                 installedByMarket = null,
                 remoteVersion = "2.0.9",
+                remoteVersionCodeIsReal = false,
                 remoteVersionCode = 9,
             ),
         )
@@ -112,6 +201,7 @@ class VersionTest {
                 installedVersionCode = 7,
                 installedByMarket = "build-70",
                 remoteVersion = "build-70",
+                remoteVersionCodeIsReal = false,
                 remoteVersionCode = 70,
             ),
         )
@@ -121,6 +211,7 @@ class VersionTest {
                 installedVersionCode = 7,
                 installedByMarket = "build-70",
                 remoteVersion = "build-71",
+                remoteVersionCodeIsReal = false,
                 remoteVersionCode = 71,
             ),
         )
@@ -134,6 +225,7 @@ class VersionTest {
                 installedVersionCode = 0,
                 installedByMarket = "1.9.0",
                 remoteVersion = "1.8.0",
+                remoteVersionCodeIsReal = false,
                 remoteVersionCode = 0,
             ),
         )
@@ -151,6 +243,7 @@ class VersionTest {
                 installedVersionCode = 123,
                 installedByMarket = null,
                 remoteVersion = "nightly-def456",
+                remoteVersionCodeIsReal = false,
                 remoteVersionCode = 456,
             ),
         )
@@ -159,7 +252,7 @@ class VersionTest {
     @Test
     fun `no remote version means nothing to offer`() {
         assertFalse(
-            Version.updateAvailable(null, 1, null, null, 0),
+            Version.updateAvailable(null, 1, null, null, 0, remoteVersionCodeIsReal = false),
         )
     }
 
