@@ -13,7 +13,7 @@ which always redirects to the current signed release. Every other app installs f
 inside BrightMarket once it's on the phone — this is the only one that has to come
 from the web, for the obvious reason.
 
-Browse the catalogue at **[brightmarket.gzl.dev](https://brightmarket.gzl.dev)**.
+Browse the catalog at **[brightmarket.gzl.dev](https://brightmarket.gzl.dev)**.
 
 <p align="center">
   <img src="docs/screenshots/01-browse.png" width="30%" />
@@ -32,13 +32,13 @@ is just built for a normal Android. The wheel does nothing in it, and it has no 
 which of your APKs is a Light Phone app, because it only knows the GitHub links you
 pasted into it yourself.
 
-BrightMarket does the same update tracking, fits this phone, and adds a catalogue on
+BrightMarket does the same update tracking, fits this phone, and adds a catalog on
 top so there is somewhere to find apps in the first place.
 
 ## Coming from Obtainium
 
 **Import from Obtainium**, in Settings, takes an Obtainium export file and picks up
-everything in it — including apps that aren't in the catalogue, which are kept and
+everything in it — including apps that aren't in the catalog, which are kept and
 marked `UNLISTED` rather than dropped.
 
 It reads both the current `{"apps":[{"app":{…}}]}` shape and the older bare-array
@@ -135,7 +135,7 @@ opaque `Failure: Invalid` and nothing else. Exactly one APK is attached per rele
 ## Nightly builds
 
 A push to this repo publishes a **nightly**, marked as a prerelease. The
-catalogue skips prereleases, so a nightly is only ever offered to someone who
+catalog skips prereleases, so a nightly is only ever offered to someone who
 has asked for one in Settings → Updates. Official releases are cut deliberately
 — `[release]` in the commit's **subject line**, or running the workflow by hand.
 

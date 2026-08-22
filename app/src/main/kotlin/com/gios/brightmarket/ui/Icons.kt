@@ -17,7 +17,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
  * The SDK's own set is ~105 `ic_*_white.xml` vectors, and the handful used here
  * are simple enough to draw directly — which avoids copying assets out of
  * another project and keeps the APK from carrying a drawable set it barely
- * touches. They follow the same rules as the SDK's: single colour, stroked not
+ * touches. They follow the same rules as the SDK's: single color, stroked not
  * filled, no rounded decoration, sized in grid units by the caller.
  *
  * Everything is expressed as a fraction of the canvas, so one definition works

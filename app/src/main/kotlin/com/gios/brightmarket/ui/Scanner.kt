@@ -61,7 +61,7 @@ private class QrAnalyzer(private val onResult: (String) -> Unit) : ImageAnalysis
 /**
  * Scan screen.
  *
- * Accepts two things: a `brightmarket://` link from the desktop catalogue, and
+ * Accepts two things: a `brightmarket://` link from the desktop catalog, and
  * a plain GitHub repo URL. The second is what makes this useful beyond the
  * store — point it at any repo that publishes APK releases and it gets tracked
  * for updates like anything else.

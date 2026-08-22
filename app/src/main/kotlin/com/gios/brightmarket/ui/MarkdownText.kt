@@ -63,8 +63,8 @@ private fun annotate(spans: List<Markdown.Span>): AnnotatedString = buildAnnotat
             Markdown.Style.BOLD -> SpanStyle(fontWeight = FontWeight.Bold)
             Markdown.Style.ITALIC -> SpanStyle(fontStyle = FontStyle.Italic)
             Markdown.Style.CODE -> SpanStyle(fontFamily = FontFamily.Monospace)
-            // Underlined rather than coloured: there is no accent in the
-            // palette, and a link that is merely a different grey is invisible.
+            // Underlined rather than colored: there is no accent in the
+            // palette, and a link that is merely a different gray is invisible.
             Markdown.Style.LINK -> SpanStyle(textDecoration = TextDecoration.Underline)
             Markdown.Style.PLAIN -> SpanStyle()
         }

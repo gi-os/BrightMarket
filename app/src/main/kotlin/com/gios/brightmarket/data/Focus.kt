@@ -8,7 +8,7 @@ import android.content.Context
  * The problem isn't installing apps — that already works. It's that a store on
  * your phone is a scrollable feed, and a scrollable feed on a Light Phone
  * defeats the point of owning one. So discovery moves to the desktop: you
- * browse the catalogue on a real screen and send the phone one specific
+ * browse the catalog on a real screen and send the phone one specific
  * decision, as a QR code.
  *
  * What stays on the phone is deliberate: the apps you already have, and their

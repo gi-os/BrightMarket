@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.sp
 /**
  * LightOS's design language, ported from light-sdk's `sdk/ui` (MIT).
  *
- * Three colours. No accent, no dividers, no elevation. Anything that looks like
+ * Three colors. No accent, no dividers, no elevation. Anything that looks like
  * Material — ripples, filled text fields, tonal surfaces, progress spinners —
  * appears nowhere in LightOS and is deliberately absent here.
  */
@@ -154,7 +154,7 @@ fun BrightMarketTheme(content: @Composable () -> Unit) {
         // defaults to BLACK -- it is normally supplied by a Surface, which this
         // app deliberately doesn't use (Surface brings elevation and tonal
         // overlays that appear nowhere in LightOS). Without this, every Text
-        // that doesn't name a colour renders black on black and is invisible.
+        // that doesn't name a color renders black on black and is invisible.
         // The colorScheme above does NOT cover it: onBackground is only read by
         // components that consult it, not by a bare Text.
         CompositionLocalProvider(LocalContentColor provides Light.Content) {

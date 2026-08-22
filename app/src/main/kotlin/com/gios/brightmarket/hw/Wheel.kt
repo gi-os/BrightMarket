@@ -4,7 +4,7 @@ package com.gios.brightmarket.hw
  * The one part of `hw/` that did not move to light-common.
  *
  * light-common 1.2.0's wheel arms on two notches and then passes everything through, which is
- * the right behaviour for scrolling a list. It is not the right behaviour here: walking the
+ * the right behavior for scrolling a list. It is not the right behavior here: walking the
  * tvOS focus turns one inverted notch — a few percent of them are, because the sensor reads a
  * moving surface rather than a detent — into a whole row going the wrong way. v1.17 fixed that
  * with [NotchGuard], which also holds a turn's direction and only commits a reversal on the

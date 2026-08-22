@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- The market stall: scalloped awning on two posts, a counter with goods, and
-     a blank sign below. Single colour, thick rounded strokes, matching the
+     a blank sign below. Single color, thick rounded strokes, matching the
      LightOS icon set's visual language. Drawn on the 108dp adaptive-icon canvas
      with everything inside the 72dp safe zone (18dp..90dp). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"

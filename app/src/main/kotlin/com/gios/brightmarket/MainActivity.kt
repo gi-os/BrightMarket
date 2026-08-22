@@ -268,11 +268,11 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         onOpenControl = {
-                            // BrightControl is in the catalogue, so the honest answer to "you
+                            // BrightControl is in the catalog, so the honest answer to "you
                             // need it" is its own page rather than a link somewhere else.
                             val control = apps.firstOrNull { it.pkg == AdbSetup.CONTROL_PKG }
                             if (control != null) selected = control
-                            else toast("BrightControl isn't in the catalogue right now.")
+                            else toast("BrightControl isn't in the catalog right now.")
                         },
                     )
                     return@BrightMarketTheme
@@ -440,7 +440,7 @@ class MainActivity : ComponentActivity() {
     /**
      * Something to add, from the scanner or from the paste field beside it.
      *
-     * Three shapes: a brightmarket:// link from the desktop catalogue, a GitHub
+     * Three shapes: a brightmarket:// link from the desktop catalog, a GitHub
      * repo URL — which is what makes this useful for apps nobody has submitted
      * — and a direct link to an .apk.
      */

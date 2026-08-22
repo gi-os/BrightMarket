@@ -226,7 +226,7 @@ fun AddScreen(onSubmit: (String) -> Unit, onScan: () -> Unit) {
         Text("SCAN A CODE", style = MaterialTheme.typography.titleMedium, color = Light.ContentSecondary)
         Spacer(Modifier.height(gridUnits(0.4f)))
         Text(
-            "From the desktop catalogue, or any QR with a repo link in it.",
+            "From the desktop catalog, or any QR with a repo link in it.",
             style = MaterialTheme.typography.bodySmall,
             color = Light.ContentSecondary,
         )
@@ -341,7 +341,7 @@ fun SettingsScreen(
 
         if (focusEnabled) {
             // No off switch here. Focus mode is only lifted by scanning the QR
-            // from the desktop catalogue, which is the whole point: the thing
+            // from the desktop catalog, which is the whole point: the thing
             // you'd have to go and find is a different screen in a different
             // room, and that pause is the feature.
             //
