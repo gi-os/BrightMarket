@@ -1,0 +1,57 @@
+name: Check
+
+# Everything build.yml does up to the point where it would publish, on any branch that is not
+# main. There is no way to build an APK in the Cowork sandbox — aapt2 ships x86_64-only for
+# Linux — so a change worked on there has never been compiled by anything until it is pushed.
+#
+# Without this, BrightMarket had no branch CI at all: build.yml is main-only, so the only way
+# to find out whether a change compiled was to push it to main, which cuts a build the phone
+# offers as an update within minutes. The one app whose job is installing other apps is the
+# worst one to prove on the device.
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Index parsing, version comparison and the Obtainium matcher are plain JVM code, and
+      # each of them fails silently on a phone — a wrong answer here reads as "no update
+      # available" forever rather than as a crash. Tests first so a logic break is the error
+      # you see, not a resource one further down.
+      - name: Unit tests
+        run: ./gradlew :app:testDebugUnitTest --stacktrace
+        env:
+          # light-common resolves from GitHub Packages, which has no anonymous read.
+          GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPORT_TOKEN: ${{ secrets.REPORT_TOKEN }}
+
+      # assembleRelease rather than a bare compile: manifest merge and resource processing are
+      # where a missing class or a permission that does not exist actually surface, and a
+      # Kotlin compile never reaches either.
+      - name: Build APKs
+        run: ./gradlew :app:assembleDebug :app:assembleRelease --stacktrace
+        env:
+          GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPORT_TOKEN: ${{ secrets.REPORT_TOKEN }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BrightMarket-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
