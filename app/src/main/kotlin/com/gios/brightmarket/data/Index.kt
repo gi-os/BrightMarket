@@ -45,6 +45,19 @@ data class App(
      */
     val screenshots: List<String> = emptyList(),
     /**
+     * The ADB setup this app's README asks you to run from a computer, verbatim.
+     *
+     * BrightControl can run these on the phone itself. They are kept as the
+     * literal lines the README shows -- not a parsed form -- because the person
+     * approving them should see the same words the author wrote, and because
+     * nothing here is trusted anyway: BrightControl re-parses every line,
+     * rebuilds the command pinned to this package, and refuses anything else.
+     *
+     * Empty for almost every app. Treat that as "needs no setup", not as a
+     * loading state.
+     */
+    val adbSetup: List<String> = emptyList(),
+    /**
      * The newest prerelease, when the app publishes one. Null for almost every
      * app — treat that as "there is no nightly", not as a loading state.
      *
@@ -232,6 +245,11 @@ object Index {
                 screenshots = o.optJSONArray("screenshots")?.let { arr ->
                     (0 until arr.length()).mapNotNull { j ->
                         arr.optJSONObject(j)?.optString("url")?.takeIf { it.isNotBlank() }
+                    }
+                } ?: emptyList(),
+                adbSetup = o.optJSONArray("adb")?.let { arr ->
+                    (0 until arr.length()).mapNotNull { j ->
+                        arr.optString(j)?.takeIf { it.isNotBlank() }
                     }
                 } ?: emptyList(),
                 preview = o.optJSONObject("preview")?.let { pv ->

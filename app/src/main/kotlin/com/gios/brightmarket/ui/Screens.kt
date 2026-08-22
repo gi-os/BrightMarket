@@ -817,6 +817,12 @@ fun DetailScreen(
     /** Re-check this one app, rather than the whole catalog. */
     onRefresh: (() -> Unit)? = null,
     refreshing: Boolean = false,
+    /** Hand this app's ADB setup to BrightControl. Null when it needs none. */
+    onActivateAdb: (() -> Unit)? = null,
+    /** False when BrightControl isn't on the phone, which changes what we offer. */
+    controlInstalled: Boolean = true,
+    /** Open BrightControl's own page, so it can be installed. */
+    onOpenControl: (() -> Unit)? = null,
 ) {
     // The system back gesture must leave the page. Without this the only way out
     // was a link at the very bottom, which the screenshot strip pushed below the
@@ -887,6 +893,52 @@ fun DetailScreen(
                     .lightClickable(enabled = enabled, onClick = onInstall)
                     .padding(vertical = gridUnits(0.4f), horizontal = gridUnits(0.1f)),
             )
+
+            // Apps that need a grant LightOS has no screen for. The README says to run these
+            // from a computer; BrightControl can run them here instead.
+            if (app.adbSetup.isNotEmpty()) {
+                Spacer(Modifier.height(gridUnits(1.2f)))
+                Text(
+                    "NEEDS ADB SETUP",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Light.ContentSecondary,
+                )
+                Spacer(Modifier.height(gridUnits(0.4f)))
+                Text(
+                    if (controlInstalled) {
+                        "This app needs permissions the phone has no settings screen for. " +
+                            "BrightControl can grant them without a computer. It will show you " +
+                            "exactly what runs before anything happens."
+                    } else {
+                        "This app needs permissions the phone has no settings screen for. " +
+                            "Granting them without a computer needs BrightControl, which isn't " +
+                            "installed. Install it and finish its ADB setup first."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Light.ContentSecondary,
+                )
+                Spacer(Modifier.height(gridUnits(0.5f)))
+                app.adbSetup.forEach { line ->
+                    Text(
+                        line,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Light.ContentSecondary,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.height(gridUnits(0.2f)))
+                }
+                Spacer(Modifier.height(gridUnits(0.4f)))
+                Text(
+                    text = if (controlInstalled) "ACTIVATE ADB" else "GET BRIGHTCONTROL",
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier
+                        .lightClickable {
+                            if (controlInstalled) onActivateAdb?.invoke() else onOpenControl?.invoke()
+                        }
+                        .padding(vertical = gridUnits(0.4f), horizontal = gridUnits(0.1f)),
+                )
+            }
 
             if (progress is Installer.Progress.Downloading && progress.total > 0) {
                 Spacer(Modifier.height(gridUnits(0.4f)))

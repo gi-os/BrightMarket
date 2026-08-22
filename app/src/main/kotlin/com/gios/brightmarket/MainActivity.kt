@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
+import com.gios.brightmarket.data.AdbSetup
 import com.gios.brightmarket.data.App
 import com.gios.brightmarket.data.Focus
 import com.gios.brightmarket.data.Followed
@@ -260,6 +261,19 @@ class MainActivity : ComponentActivity() {
                         // through every tracked repo, which is a request each.
                         onRefresh = { refresh() },
                         refreshing = loading,
+                        controlInstalled = AdbSetup.controlInstalled(this@MainActivity),
+                        onActivateAdb = {
+                            if (!AdbSetup.open(this@MainActivity, app)) {
+                                toast("Couldn't open BrightControl.")
+                            }
+                        },
+                        onOpenControl = {
+                            // BrightControl is in the catalogue, so the honest answer to "you
+                            // need it" is its own page rather than a link somewhere else.
+                            val control = apps.firstOrNull { it.pkg == AdbSetup.CONTROL_PKG }
+                            if (control != null) selected = control
+                            else toast("BrightControl isn't in the catalogue right now.")
+                        },
                     )
                     return@BrightMarketTheme
                 }
