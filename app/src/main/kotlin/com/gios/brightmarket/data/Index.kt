@@ -108,8 +108,19 @@ data class Installed(
     val isSelf: Boolean = false,
     /** Resolved once, at partition time, so the UI and the installer agree. */
     val target: Target = app.target(false),
+    /** PackageManager's versionName, for the string comparison. */
+    val installedVersionName: String? = null,
+    /** The release string BrightMarket recorded installing, if it installed it. */
+    val installedByMarket: String? = null,
 ) {
-    val updatable: Boolean get() = target.versionCode > installedVersionCode
+    val updatable: Boolean
+        get() = Version.updateAvailable(
+            installedVersionName = installedVersionName,
+            installedVersionCode = installedVersionCode,
+            installedByMarket = installedByMarket,
+            remoteVersion = target.version,
+            remoteVersionCode = target.versionCode,
+        )
 }
 
 object Index {
@@ -132,10 +143,12 @@ object Index {
      * nothing on screen for the apps BrightMarket actually indexes — which read
      * as the import having skipped them.
      *
-     * Comparison is on versionCode, never the version *name*. Names are
-     * marketing strings — "1.10.0" sorts before "1.9.0" as text — while every
-     * Bright app's CI stamps versionCode from its monotonic run number. Getting
-     * this wrong reads as "no update available", forever, silently.
+     * Comparison used to be versionCode only, on the reasoning that names are
+     * marketing strings while every Bright app's CI stamps versionCode from its
+     * monotonic run number. True for the Bright fleet, and wrong for everyone
+     * else: the index's versionCode is the *trailing digits of the tag*, so an
+     * app on ordinary semantic versioning going v1.2.10 -> v1.3.0 compared 0
+     * against 10 and reported no update, forever, silently. See [Version].
      */
     fun partitionInstalled(
         apps: List<App>,
@@ -143,10 +156,21 @@ object Index {
         selfPkg: String = "",
         followed: Set<String> = emptySet(),
         nightly: Boolean = false,
+        /** PackageManager's versionName for a package, when it can be read. */
+        versionNameOf: (String) -> String? = { null },
+        /** What BrightMarket recorded installing for a package. */
+        marketVersionOf: (String) -> String? = { null },
     ): Triple<List<Installed>, List<Installed>, List<App>> {
         val present = apps.mapNotNull { app ->
             installed[app.pkg]?.let {
-                Installed(app, it, app.pkg == selfPkg, app.target(nightly))
+                Installed(
+                    app = app,
+                    installedVersionCode = it,
+                    isSelf = app.pkg == selfPkg,
+                    target = app.target(nightly),
+                    installedVersionName = versionNameOf(app.pkg),
+                    installedByMarket = marketVersionOf(app.pkg),
+                )
             }
         }
         val (updates, current) = present.partition { it.updatable }

@@ -225,11 +225,31 @@ object Tracked {
         data class Unreachable(val detail: String) : Outcome
     }
 
-    fun resolve(ctx: Context, entry: Entry, token: String? = null): Outcome {
+    /**
+     * @param force skip the freshness window and really ask GitHub.
+     *
+     * Without this, asking for a refresh inside [FRESH_FOR_MS] returned the
+     * cached answer without a request — so a release published twenty minutes
+     * ago stayed invisible however many times the user pulled to refresh, and
+     * the app looked broken next to any other updater. The rate-limit reason
+     * for the cache is real, which is why the window still applies to automatic
+     * checks; it just no longer overrules someone deliberately asking.
+     *
+     * A forced check still sends `If-None-Match`, because a 304 is free and
+     * genuinely means nothing changed.
+     */
+    fun resolve(
+        ctx: Context,
+        entry: Entry,
+        token: String? = null,
+        force: Boolean = false,
+    ): Outcome {
         val cached = cacheFor(ctx, entry.repo)
         // Nothing changes minute to minute, and every request spends a sixtieth
         // of the hourly allowance. A repo checked recently is not checked again.
-        if (cached != null && System.currentTimeMillis() - cached.checkedAt < FRESH_FOR_MS) {
+        if (!force && cached != null &&
+            System.currentTimeMillis() - cached.checkedAt < FRESH_FOR_MS
+        ) {
             return cached.outcome
         }
 

@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.gios.brightmarket.data.App
 import com.gios.brightmarket.data.Installed
 import com.gios.brightmarket.data.Sort
+import com.gios.brightmarket.data.Version
 import com.gios.brightmarket.hw.WheelScroll
 import com.gios.brightmarket.install.Installer
 
@@ -556,6 +557,8 @@ fun UpdatesScreen(
     onOpen: (App) -> Unit,
     onInstallTracked: (TrackedRow) -> Unit,
     onForgetTracked: (TrackedRow) -> Unit,
+    onRefreshTracked: (TrackedRow) -> Unit = {},
+    refreshingRepo: String? = null,
     onRemoveFollowed: (App) -> Unit,
 ) {
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -644,7 +647,14 @@ fun UpdatesScreen(
             // guarantee only one of them has.
             item { SectionHeader("NOT IN BRIGHTMARKET (${tracked.size})") }
             items(tracked, key = { it.repo }) { row ->
-                TrackedRowView(row, progressFor[row.pkg ?: row.repo], onInstallTracked, onForgetTracked)
+                TrackedRowView(
+                    row,
+                    progressFor[row.pkg ?: row.repo],
+                    onInstallTracked,
+                    onForgetTracked,
+                    onRefreshTracked,
+                    refreshing = refreshingRepo.equals(row.repo, ignoreCase = true),
+                )
             }
         }
     }
@@ -661,10 +671,19 @@ data class TrackedRow(
     val versionCode: Long?,
     /** Why there is no version, when there isn't one. Null when all is well. */
     val status: String? = null,
+    /** PackageManager's versionName, for the string comparison. */
+    val installedVersionName: String? = null,
+    /** The release string BrightMarket recorded installing, if it installed it. */
+    val installedByMarket: String? = null,
 ) {
     val updatable: Boolean
-        get() = versionCode != null && installedVersionCode != null &&
-            versionCode > installedVersionCode
+        get() = installedVersionCode != null && Version.updateAvailable(
+            installedVersionName = installedVersionName,
+            installedVersionCode = installedVersionCode,
+            installedByMarket = installedByMarket,
+            remoteVersion = version,
+            remoteVersionCode = versionCode ?: 0L,
+        )
 }
 
 @Composable
@@ -673,6 +692,8 @@ private fun TrackedRowView(
     progress: Installer.Progress?,
     onInstall: (TrackedRow) -> Unit,
     onForget: (TrackedRow) -> Unit,
+    onRefresh: (TrackedRow) -> Unit,
+    refreshing: Boolean,
 ) {
     Column(
         Modifier
@@ -707,12 +728,27 @@ private fun TrackedRowView(
             overflow = TextOverflow.Ellipsis,
         )
         Spacer(Modifier.height(gridUnits(0.2f)))
-        Text(
-            "FORGET",
-            style = MaterialTheme.typography.labelSmall,
-            color = Light.ContentSecondary,
-            modifier = Modifier.lightClickable { onForget(row) },
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // Re-checks this one repo. Every tracked repo costs its own request,
+            // so the all-apps refresh is the expensive way to ask about one.
+            Text(
+                if (refreshing) "CHECKING…" else "CHECK NOW",
+                style = MaterialTheme.typography.labelSmall,
+                color = Light.ContentSecondary,
+                modifier = if (refreshing) {
+                    Modifier
+                } else {
+                    Modifier.lightClickable { onRefresh(row) }
+                },
+            )
+            Spacer(Modifier.width(gridUnits(1f)))
+            Text(
+                "FORGET",
+                style = MaterialTheme.typography.labelSmall,
+                color = Light.ContentSecondary,
+                modifier = Modifier.lightClickable { onForget(row) },
+            )
+        }
     }
 }
 
@@ -775,6 +811,9 @@ fun DetailScreen(
     onInstall: () -> Unit,
     onUninstall: () -> Unit,
     onBack: () -> Unit,
+    /** Re-check this one app, rather than the whole catalog. */
+    onRefresh: (() -> Unit)? = null,
+    refreshing: Boolean = false,
 ) {
     // The system back gesture must leave the page. Without this the only way out
     // was a link at the very bottom, which the screenshot strip pushed below the
@@ -787,7 +826,12 @@ fun DetailScreen(
             .background(Light.Background)
             .verticalScroll(rememberScrollState())
     ) {
-        TopBar(app.name.uppercase(), onBack = onBack)
+        TopBar(
+            app.name.uppercase(),
+            onBack = onBack,
+            onRefresh = onRefresh,
+            refreshing = refreshing,
+        )
 
         Column(Modifier.padding(horizontal = gridUnits(Grid.INSET))) {
             MarkdownText(app.summary, style = MaterialTheme.typography.bodyMedium)

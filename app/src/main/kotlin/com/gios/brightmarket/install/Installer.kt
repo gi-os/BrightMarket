@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
+import com.gios.brightmarket.data.InstalledVersions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -73,6 +74,19 @@ object Installer {
     }
 
     /**
+     * The installed versionName — the human string, "1.4.2".
+     *
+     * The counterpart to [installedVersionCode], and the one that can actually
+     * be compared against a release tag. See [com.gios.brightmarket.data.Version]
+     * for why comparing codes alone was missing updates.
+     */
+    fun installedVersionName(ctx: Context, pkg: String): String? = try {
+        ctx.packageManager.getPackageInfo(pkg, 0).versionName
+    } catch (e: PackageManager.NameNotFoundException) {
+        null
+    }
+
+    /**
      * @param expectedSha256 the hash the index published, or null for a tracked
      *   repo that BrightMarket doesn't index. Null means the download CANNOT be
      *   verified — nothing generated a hash for it — so the check is skipped
@@ -85,6 +99,11 @@ object Installer {
         apkUrl: String,
         expectedSha256: String?,
         pkg: String,
+        /**
+         * The release string being installed, recorded once the install lands so
+         * later checks can compare like with like. See [InstalledVersions].
+         */
+        releaseVersion: String? = null,
         onProgress: (Progress) -> Unit = {},
         /** Called with (applicationId, versionCode) once the APK is on disk. */
         onIdentified: (String, Long) -> Unit = { _, _ -> },
@@ -144,7 +163,9 @@ object Installer {
             }
 
             onProgress(Progress.AwaitingConfirmation)
-            commitSession(ctx, apk, pkg.ifBlank { identity.first })
+            val target = pkg.ifBlank { identity.first }
+            releaseVersion?.let { InstalledVersions.markPending(ctx, target, it) }
+            commitSession(ctx, apk, target)
             apk.delete()
             // delete() returns Boolean, which would make this Result<Boolean>.
             // The contract is Result<Unit>, and whether the temp copy was still

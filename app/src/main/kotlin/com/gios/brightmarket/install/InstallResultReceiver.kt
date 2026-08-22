@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.widget.Toast
+import com.gios.brightmarket.data.InstalledVersions
 
 /**
  * Receives the PackageInstaller session result.
@@ -29,6 +30,17 @@ class InstallResultReceiver : BroadcastReceiver() {
             confirm?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             confirm?.let(context::startActivity)
             return
+        }
+
+        // Which release actually landed, so the next update check can compare
+        // two strings from the same source instead of guessing across schemes.
+        // Only on success: a cancelled install must not claim the new version,
+        // because that record's job is to say "up to date".
+        val pkg = intent.getStringExtra(PackageInstaller.EXTRA_PACKAGE_NAME).orEmpty()
+        if (status == PackageInstaller.STATUS_SUCCESS) {
+            InstalledVersions.confirm(context, pkg)
+        } else {
+            InstalledVersions.clearPending(context, pkg)
         }
 
         val message = when (status) {

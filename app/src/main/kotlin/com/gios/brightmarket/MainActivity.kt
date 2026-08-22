@@ -22,6 +22,7 @@ import com.gios.brightmarket.data.App
 import com.gios.brightmarket.data.Focus
 import com.gios.brightmarket.data.Followed
 import com.gios.brightmarket.data.Index
+import com.gios.brightmarket.data.InstalledVersions
 import com.gios.brightmarket.data.Obtainium
 import com.gios.brightmarket.data.Sort
 import com.gios.brightmarket.data.Tracked
@@ -39,6 +40,8 @@ class MainActivity : ComponentActivity() {
 
     private var apps by mutableStateOf<List<App>>(emptyList())
     private var loading by mutableStateOf(true)
+    /** The one tracked repo being re-checked right now, if any. */
+    private var refreshingRepo by mutableStateOf<String?>(null)
     private var error by mutableStateOf<String?>(null)
     private var sort by mutableStateOf(Sort.UPDATED)
     private var selected by mutableStateOf<App?>(null)
@@ -251,12 +254,22 @@ class MainActivity : ComponentActivity() {
                         onInstall = { install(app) },
                         onUninstall = { uninstall(app.pkg) },
                         onBack = { selected = null },
+                        // One app, not the whole catalog. For an indexed app the
+                        // catalog is a single static file, so re-reading it is
+                        // one request either way — what this saves is the walk
+                        // through every tracked repo, which is a request each.
+                        onRefresh = { refresh() },
+                        refreshing = loading,
                     )
                     return@BrightMarketTheme
                 }
 
                 val (updates, upToDate, notInstalled) =
-                    Index.partitionInstalled(apps, installed, packageName, followed, nightly)
+                    Index.partitionInstalled(
+                        apps, installed, packageName, followed, nightly,
+                        versionNameOf = { Installer.installedVersionName(this@MainActivity, it) },
+                        marketVersionOf = { InstalledVersions.get(this@MainActivity, it) },
+                    )
 
                 // Three destinations, which is the SDK's hard ceiling for a
                 // bottom bar containing any text item.
@@ -313,6 +326,11 @@ class MainActivity : ComponentActivity() {
                             onOpen = { selected = it; progress = null },
                             onInstallTracked = ::installTracked,
                             onForgetTracked = ::forgetTracked,
+                            onRefreshTracked = { row ->
+                                refreshingRepo = row.repo
+                                refreshTracked(only = row.repo, force = true)
+                            },
+                            refreshingRepo = refreshingRepo,
                             onRemoveFollowed = { app ->
                                 Followed.remove(this@MainActivity, app.pkg)
                                 followed = Followed.all(this@MainActivity)
@@ -523,6 +541,9 @@ class MainActivity : ComponentActivity() {
                 // No hash exists for an unlisted app; see Installer.install.
                 expectedSha256 = null,
                 pkg = row.pkg ?: "",
+                // Recorded so the next check compares two release strings from
+                // the same repo rather than a tag against a versionName.
+                releaseVersion = row.version,
                 onProgress = { p -> progressFor = progressFor + (key to p) },
                 onIdentified = { id, _ ->
                     // A GitHub release doesn't say which package it installs, so
@@ -544,12 +565,22 @@ class MainActivity : ComponentActivity() {
         toast("Stopped tracking ${row.repo}")
     }
 
-    private fun refreshTracked() {
+    /**
+     * @param only re-check just this repo, leaving the other rows as they are.
+     *   Each tracked repo costs its own GitHub request, so refreshing all of
+     *   them to see whether one moved is the expensive way to ask a small
+     *   question — and on a shared carrier IP it is how the hourly allowance
+     *   gets spent.
+     * @param force ignore the freshness window. Set when a person asked, never
+     *   for an automatic check.
+     */
+    private fun refreshTracked(only: String? = null, force: Boolean = false) {
         lifecycleScope.launch {
-            val entries = Tracked.all(this@MainActivity)
+            val all = Tracked.all(this@MainActivity)
+            val entries = if (only == null) all else all.filter { it.repo.equals(only, true) }
             val rows = withContext(Dispatchers.IO) {
                 entries.map { e ->
-                    val outcome = Tracked.resolve(this@MainActivity, e)
+                    val outcome = Tracked.resolve(this@MainActivity, e, force = force)
                     val resolved = (outcome as? Tracked.Outcome.Ok)?.resolved
                     val pkg = e.pkg ?: resolved?.entry?.pkg
                     TrackedRow(
@@ -562,6 +593,12 @@ class MainActivity : ComponentActivity() {
                             Installer.installedVersionCode(this@MainActivity, it)
                         },
                         versionCode = resolved?.versionCode,
+                        installedVersionName = pkg?.let {
+                            Installer.installedVersionName(this@MainActivity, it)
+                        },
+                        installedByMarket = pkg?.let {
+                            InstalledVersions.get(this@MainActivity, it)
+                        },
                         status = when (outcome) {
                             is Tracked.Outcome.Ok -> null
                             is Tracked.Outcome.NoRelease -> "no APK in its releases"
@@ -589,7 +626,15 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
-            trackedRows = rows
+            // A scoped refresh replaces only the row it re-checked. Assigning
+            // the whole list would drop every other tracked app off the screen.
+            trackedRows = if (only == null) {
+                rows
+            } else {
+                val fresh = rows.associateBy { it.repo.lowercase() }
+                trackedRows.map { fresh[it.repo.lowercase()] ?: it }
+            }
+            refreshingRepo = null
         }
     }
 
@@ -611,7 +656,11 @@ class MainActivity : ComponentActivity() {
                         // "Refreshed" alone leaves you no better informed than
                         // before you pressed it.
                         val (updates, _, _) =
-                            Index.partitionInstalled(apps, installed, packageName, followed, nightly)
+                            Index.partitionInstalled(
+                        apps, installed, packageName, followed, nightly,
+                        versionNameOf = { Installer.installedVersionName(this@MainActivity, it) },
+                        marketVersionOf = { InstalledVersions.get(this@MainActivity, it) },
+                    )
                         toast(
                             when (updates.size) {
                                 0 -> "Up to date · ${apps.size} apps"
@@ -648,6 +697,7 @@ class MainActivity : ComponentActivity() {
                 apkUrl = t.apkUrl,
                 expectedSha256 = t.sha256,
                 pkg = app.pkg,
+                releaseVersion = t.version,
                 onProgress = { progress = it },
             ).onSuccess {
                 progress = null
