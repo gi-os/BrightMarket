@@ -44,6 +44,32 @@ package com.gios.brightmarket.data
  */
 object Version {
 
+    /**
+     * How to name what is on the phone in an "old -> new" line.
+     *
+     * The line used to read `build 214 -> v1.4.2`, which puts two different
+     * kinds of thing on either side of the arrow: a versionCode against a
+     * release name. Nobody recognizes the left half as the version they are
+     * running, so the line stops being a comparison and becomes a riddle.
+     *
+     * Preference order is the same as [updateAvailable]'s: the release string
+     * BrightMarket recorded installing is exact, PackageManager's versionName is
+     * usually right, and the code is the last resort for an app that reports no
+     * name at all.
+     */
+    fun installedLabel(
+        installedByMarket: String?,
+        installedVersionName: String?,
+        installedVersionCode: Long,
+    ): String {
+        val name = normalize(installedByMarket) ?: normalize(installedVersionName)
+        return if (name != null) "v$name" else "build $installedVersionCode"
+    }
+
+    /** A release version as it is shown: normalized, always `v`-prefixed. */
+    fun display(version: String?): String =
+        normalize(version)?.let { "v$it" } ?: "unknown"
+
     /** Strip the decoration that separates a tag from the version inside it. */
     fun normalize(raw: String?): String? =
         raw?.trim()

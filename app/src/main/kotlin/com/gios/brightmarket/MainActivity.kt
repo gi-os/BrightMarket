@@ -320,6 +320,10 @@ class MainActivity : ComponentActivity() {
                             category = category,
                             categories = Index.categories(apps),
                             installed = installed,
+                            installedVersionOf = {
+                                InstalledVersions.get(this@MainActivity, it)
+                                    ?: Installer.installedVersionName(this@MainActivity, it)
+                            },
                             loading = loading,
                             error = error,
                             onQuery = { query = it },

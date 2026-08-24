@@ -129,6 +129,10 @@ data class Installed(
     /** The release string BrightMarket recorded installing, if it installed it. */
     val installedByMarket: String? = null,
 ) {
+    /** What to show on the left of the arrow. Never a versionCode if a name exists. */
+    val installedLabel: String
+        get() = Version.installedLabel(installedByMarket, installedVersionName, installedVersionCode)
+
     val updatable: Boolean
         get() = Version.updateAvailable(
             installedVersionName = installedVersionName,

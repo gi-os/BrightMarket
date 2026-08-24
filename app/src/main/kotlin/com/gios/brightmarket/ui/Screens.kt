@@ -460,7 +460,13 @@ fun CategoryRow(categories: List<String>, current: String, onSelect: (String) ->
 
 /** List rows are `copy` over `detail` — the SDK's own convention. */
 @Composable
-fun AppRow(app: App, installedVersionCode: Long?, onClick: () -> Unit) {
+fun AppRow(
+    app: App,
+    installedVersionCode: Long?,
+    /** The release string on the phone, when one is known. */
+    installedVersion: String? = null,
+    onClick: () -> Unit,
+) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -487,7 +493,8 @@ fun AppRow(app: App, installedVersionCode: Long?, onClick: () -> Unit) {
             text = when {
                 installedVersionCode == null -> app.summary
                 app.versionCode > installedVersionCode ->
-                    "build $installedVersionCode → v${app.version}"
+                    "${Version.installedLabel(null, installedVersion, installedVersionCode)} → " +
+                        Version.display(app.version)
                 else -> "v${app.version}"
             },
             style = MaterialTheme.typography.bodySmall,
@@ -506,6 +513,8 @@ fun BrowseScreen(
     category: String,
     categories: List<String>,
     installed: Map<String, Long>,
+    /** The release string on the phone for a package, when it can be read. */
+    installedVersionOf: (String) -> String? = { null },
     loading: Boolean,
     error: String?,
     onQuery: (String) -> Unit,
@@ -529,7 +538,7 @@ fun BrowseScreen(
                 WheelScroll(listState)
                 LazyColumn(Modifier.weight(1f), state = listState) {
                 items(apps, key = { it.pkg }) { app ->
-                    AppRow(app, installed[app.pkg]) { onOpen(app) }
+                    AppRow(app, installed[app.pkg], installedVersionOf(app.pkg)) { onOpen(app) }
                 }
                 }
             }
@@ -721,7 +730,9 @@ private fun TrackedRowView(
                 // Was "no APK release found" for every failure, including the
                 // ones that say nothing about the repo at all.
                 row.status != null -> "${row.repo} · ${row.status}"
-                row.updatable -> "${row.repo} · update to ${row.version}"
+                row.updatable ->
+                    "${row.repo} · ${Version.installedLabel(row.installedByMarket, row.installedVersionName, row.installedVersionCode ?: 0L)}" +
+                        " → ${Version.display(row.version)}"
                 row.installedVersionCode != null -> "${row.repo} · ${row.version}"
                 else -> "${row.repo} · ${row.version} · not installed"
             },
@@ -785,11 +796,11 @@ private fun UpdateRow(entry: Installed, progress: Installer.Progress?, onClick: 
                 progress is Installer.Progress.AwaitingConfirmation -> "Confirm the install…"
                 progress is Installer.Progress.Failed -> progress.reason
                 entry.updatable && entry.isSelf ->
-                    "build ${entry.installedVersionCode} → ${entry.target.version} · closes Market"
+                    "${entry.installedLabel} → ${Version.display(entry.target.version)} · closes Market"
                 entry.updatable && entry.target.nightly ->
-                    "build ${entry.installedVersionCode} → ${entry.target.version} · nightly"
+                    "${entry.installedLabel} → ${Version.display(entry.target.version)} · nightly"
                 entry.updatable ->
-                    "build ${entry.installedVersionCode} → v${entry.target.version}"
+                    "${entry.installedLabel} → ${Version.display(entry.target.version)}"
                 else -> "v${entry.app.version}"
             },
             style = MaterialTheme.typography.bodySmall,
