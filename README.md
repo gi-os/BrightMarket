@@ -158,8 +158,6 @@ MIT. See [LICENSE](LICENSE).
 
 ## Bright\*
 
-*The app store the Light Phone III does not have.*
-
 26 open-source apps for the **Light Phone III** — camera, music, maps, messages,
 reading, transit, games. The phone has no app store, so they install by sideload: scan one
 code from **[brightmarket.gzl.dev](https://brightmarket.gzl.dev)** and BrightMarket keeps them updated.
