@@ -43,6 +43,10 @@ class InstallResultReceiver : BroadcastReceiver() {
             InstalledVersions.clearPending(context, pkg)
         }
 
+        // Whatever started this session may be waiting on the answer -- an
+        // "update all" run holds its place in the queue until each install
+        // reaches a terminal state, because committing the next one first is
+        // what buried the confirmation dialogs.
         val message = when (status) {
             PackageInstaller.STATUS_SUCCESS -> "Installed"
             PackageInstaller.STATUS_FAILURE_ABORTED -> "Install cancelled"
@@ -54,6 +58,7 @@ class InstallResultReceiver : BroadcastReceiver() {
             PackageInstaller.STATUS_FAILURE_INCOMPATIBLE -> "Not compatible with this device"
             else -> intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "Install failed"
         }
+        InstallEvents.publish(pkg, status, message)
         Toast.makeText(context, message, Toast.LENGTH_LONG).show()
     }
 }

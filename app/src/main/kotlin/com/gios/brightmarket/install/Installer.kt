@@ -7,7 +7,9 @@ import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
 import com.gios.brightmarket.data.InstalledVersions
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -107,6 +109,17 @@ object Installer {
         onProgress: (Progress) -> Unit = {},
         /** Called with (applicationId, versionCode) once the APK is on disk. */
         onIdentified: (String, Long) -> Unit = { _, _ -> },
+        /**
+         * Don't return until PackageInstaller reports what happened.
+         *
+         * Off by default, because a single install has nothing to wait for: the
+         * broadcast receiver shows the result and refreshes the row. Batches need
+         * it. `commit()` returns as soon as the session is handed over, so
+         * committing the next app immediately launches a second confirmation
+         * activity over the first one -- and the person only ever gets to answer
+         * the last dialog standing. See [InstallEvents].
+         */
+        awaitResult: Boolean = false,
     ): Result<Unit> = withContext(Dispatchers.IO) {
         // Named per install, not per package. `pkg` is empty for a tracked repo
         // whose applicationId isn't known yet, which made the file ".apk" --
@@ -165,7 +178,31 @@ object Installer {
             onProgress(Progress.AwaitingConfirmation)
             val target = pkg.ifBlank { identity.first }
             releaseVersion?.let { InstalledVersions.markPending(ctx, target, it) }
-            commitSession(ctx, apk, target)
+            // Registered BEFORE the commit. The result broadcast can arrive on
+            // the very next tick, and a listener attached afterwards would miss
+            // it and wait out the whole timeout for an install that already
+            // finished.
+            val waiter = if (awaitResult) InstallEvents.expect(target) else null
+            try {
+                commitSession(ctx, apk, target)
+            } catch (e: Throwable) {
+                if (waiter != null) InstallEvents.cancel(target)
+                throw e
+            }
+            if (waiter != null) {
+                val outcome = try {
+                    withTimeout(CONFIRM_TIMEOUT_MS) { waiter.await() }
+                } catch (e: TimeoutCancellationException) {
+                    // A dialog nobody answered. Give up on this one rather than
+                    // stalling the rest of the batch behind it forever.
+                    InstallEvents.cancel(target)
+                    null
+                }
+                if (outcome != null && !outcome.success) {
+                    apk.delete()
+                    error(outcome.message)
+                }
+            }
             apk.delete()
             // delete() returns Boolean, which would make this Result<Boolean>.
             // The contract is Result<Unit>, and whether the temp copy was still
@@ -178,6 +215,15 @@ object Installer {
             onProgress(Progress.Failed(it.message ?: "install failed"))
         }
     }
+
+    /**
+     * How long to hold a batch open on one confirmation dialog.
+     *
+     * Long enough that reading the dialog, or glancing away mid-batch, doesn't
+     * drop the rest of the queue; short enough that a phone left on the counter
+     * is not stuck in "updating" until it is picked up.
+     */
+    private const val CONFIRM_TIMEOUT_MS = 5 * 60 * 1000L
 
     private fun download(url: String, dest: File, onProgress: (Progress) -> Unit) {
         val conn = (URL(url).openConnection() as HttpURLConnection).apply {

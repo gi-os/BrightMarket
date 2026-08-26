@@ -23,10 +23,12 @@ import com.gios.brightmarket.data.App
 import com.gios.brightmarket.data.Focus
 import com.gios.brightmarket.data.Followed
 import com.gios.brightmarket.data.Index
+import com.gios.brightmarket.data.Installed
 import com.gios.brightmarket.data.InstalledVersions
 import com.gios.brightmarket.data.Obtainium
 import com.gios.brightmarket.data.Sort
 import com.gios.brightmarket.data.Tracked
+import com.gios.brightmarket.data.Version
 import com.gios.brightmarket.data.target
 import com.gios.brightmarket.install.Installer
 import com.gios.brightmarket.ui.*
@@ -96,6 +98,12 @@ class MainActivity : ComponentActivity() {
      * stay silent though -- announcing it would be noise on every launch.
      */
     private var manualRefresh = false
+
+    /**
+     * Set when the refresh came from one app's page rather than the top bar, so
+     * the toast can speak about that app instead of counting the catalogue.
+     */
+    private var refreshOnlyPkg: String? = null
 
     private val pickExport = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -259,7 +267,13 @@ class MainActivity : ComponentActivity() {
                         // catalog is a single static file, so re-reading it is
                         // one request either way — what this saves is the walk
                         // through every tracked repo, which is a request each.
-                        onRefresh = { refresh() },
+                        onRefresh = {
+                            if (!loading) {
+                                manualRefresh = true
+                                refreshOnlyPkg = app.pkg
+                                refresh()
+                            }
+                        },
                         refreshing = loading,
                         controlInstalled = AdbSetup.controlInstalled(this@MainActivity),
                         onActivateAdb = {
@@ -663,13 +677,58 @@ class MainActivity : ComponentActivity() {
             runCatching { withContext(Dispatchers.IO) { Index.fetch(BuildConfig.INDEX_URL) } }
                 .onSuccess {
                     apps = it
+                    // The detail screen holds an App *instance*, not a package
+                    // name, and re-fetching the index builds new ones. Without
+                    // this the page you pressed refresh on kept rendering the
+                    // version it was already showing -- so the one screen where
+                    // the button had to change something was the one screen
+                    // where it never did.
+                    selected = selected?.let { open ->
+                        it.firstOrNull { a -> a.pkg == open.pkg } ?: open
+                    }
                     refreshInstalled()
                     pendingPkg?.let { pkg ->
                         selected = apps.firstOrNull { a -> a.pkg == pkg }
                         if (selected == null) toast("That app isn't in the index.")
                         pendingPkg = null
                     }
-                    if (manualRefresh) {
+                    val only = refreshOnlyPkg
+                    if (manualRefresh && only != null) {
+                        // Asked about one app, so answer about one app. Counting
+                        // the whole catalogue here told you a number you didn't
+                        // ask for and left the actual question -- is THIS one
+                        // out of date -- unanswered.
+                        val app = it.firstOrNull { a -> a.pkg == only }
+                        val onPhone = Installer.installedVersionCode(this@MainActivity, only)
+                        // Built through Installed rather than calling
+                        // Version.updateAvailable here, so the toast and the row
+                        // can never disagree about the same app.
+                        val state = if (app != null && onPhone != null) {
+                            Installed(
+                                app = app,
+                                installedVersionCode = onPhone,
+                                isSelf = app.pkg == packageName,
+                                target = app.target(nightly),
+                                installedVersionName =
+                                    Installer.installedVersionName(this@MainActivity, only),
+                                installedByMarket =
+                                    InstalledVersions.get(this@MainActivity, only),
+                            )
+                        } else {
+                            null
+                        }
+                        toast(
+                            when {
+                                app == null -> "That app isn't in the index any more."
+                                state == null ->
+                                    "${Version.display(app.target(nightly).version)} · not installed"
+                                state.updatable ->
+                                    "Update available · ${state.installedLabel} → " +
+                                        Version.display(state.target.version)
+                                else -> "Up to date · ${Version.display(state.target.version)}"
+                            }
+                        )
+                    } else if (manualRefresh) {
                         // Say what the refresh FOUND, not merely that it ran.
                         // "Refreshed" alone leaves you no better informed than
                         // before you pressed it.
@@ -693,6 +752,7 @@ class MainActivity : ComponentActivity() {
                     if (manualRefresh) toast("Couldn't reach the index.")
                 }
             manualRefresh = false
+            refreshOnlyPkg = null
             loading = false
         }
     }
@@ -736,20 +796,52 @@ class MainActivity : ComponentActivity() {
      */
     private fun updateAll(targets: List<App>) {
         lifecycleScope.launch {
+            // Not named `installed`: that is the property refreshInstalled()
+            // writes, and shadowing it here is how a counter and a map of
+            // package versions end up looking like the same thing.
+            var landed = 0
+            var missed = 0
             // Self last: installing BrightMarket kills this process, so anything
             // queued behind it would never run. See Index.selfLast.
-            for (app in Index.selfLast(targets, packageName)) {
+            val queue = Index.selfLast(targets, packageName)
+            for (app in queue) {
                 val t = app.target(nightly)
-                Installer.install(
+                val ok = Installer.install(
                     ctx = this@MainActivity,
                     apkUrl = t.apkUrl,
                     expectedSha256 = t.sha256,
                     pkg = app.pkg,
+                    // Was omitted, so a batch update installed the new release
+                    // and recorded nothing -- and the row it had just updated
+                    // went on offering the same update, because the record of
+                    // what we installed is the only exact input the comparison
+                    // has. See InstalledVersions.
+                    releaseVersion = t.version,
                     onProgress = { p -> progressFor = progressFor + (app.pkg to p) },
-                )
+                    // The one line that makes this a queue rather than a burst.
+                    // Without it every session was committed within the same
+                    // few hundred milliseconds, each confirmation dialog
+                    // launching over the last, and only the final one was ever
+                    // answerable -- so "update all" updated one app.
+                    awaitResult = true,
+                ).isSuccess
+                if (ok) landed++ else missed++
                 progressFor = progressFor - app.pkg
+                // Per app, not once at the end. A batch is exactly where the
+                // process can die halfway through (self-update, low memory), and
+                // the rows already done should read as done.
+                refreshInstalled()
             }
             refreshInstalled()
+            refreshTracked()
+            toast(
+                when {
+                    missed == 0 && landed == 1 -> "Updated 1 app"
+                    missed == 0 -> "Updated $landed apps"
+                    landed == 0 -> "Nothing was updated"
+                    else -> "Updated $landed of ${queue.size} — $missed didn't finish"
+                }
+            )
         }
     }
 

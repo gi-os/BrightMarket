@@ -4,6 +4,47 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.24
+
+**"Update all" updated one app, and a refresh on an app's own page couldn't
+change what that page was showing.**
+
+Two separate bugs, both of which made a button look dead.
+
+*Update all.* `PackageInstaller.Session.commit()` returns the moment the session
+is handed to the system — long before anything is installed. On the dialog path
+the next thing that happens is a broadcast asking us to show the system's
+confirmation screen, and the real answer arrives in a second broadcast after you
+tap INSTALL. So an install "succeeding" only ever meant the session was accepted.
+For one app that distinction is invisible. For a batch it was the whole bug: the
+loop committed every session inside a few hundred milliseconds, each confirmation
+activity launching over the last, and only the final dialog left standing could
+be answered. One app updated. Everything else silently didn't, with no error,
+because nothing had failed.
+
+The batch is now a queue that waits for each install to actually reach a terminal
+state before starting the next, so you get one dialog at a time, in order, and it
+says at the end how many landed. A dialog nobody answers times out after five
+minutes rather than stranding the rest of the queue behind it.
+
+And a batch update was not recording which release it installed — the single-app
+path did, the batch path had simply omitted the argument. That record is the only
+exact input the update comparison has, so an app updated through "update all"
+kept right on offering the same update afterwards. It records it now.
+
+*Refresh on an app's page.* The detail screen holds an app object, not a package
+name. Refreshing re-fetched the catalogue and rebuilt every one of those objects,
+but nothing re-pointed the open page at its new one — so the single screen where
+the button had to change something was the only screen where it never could. The
+version line, and whether an update was offered, stayed exactly as they were
+until you backed out and opened the page again. The open page now follows the
+refresh.
+
+Its toast also answers the question that was asked. Pressing refresh on one app
+used to report a count for the whole catalogue ("3 updates available"), which
+says nothing about the app you were looking at. It now reads
+`Up to date · v1.9` or `Update available · v1.8 → v1.9`.
+
 ## v1.23
 
 **Tracked apps that publish more than one APK could try to install the wrong
