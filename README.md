@@ -1,3 +1,5 @@
+<img src="docs/icon.png" alt="" width="72" align="left" />
+
 # BrightMarket
 
 An app store for the Light Phone III. It finds sideloaded apps, installs them, and
