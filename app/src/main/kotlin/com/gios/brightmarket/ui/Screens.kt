@@ -28,7 +28,9 @@ import androidx.compose.ui.unit.dp
 import com.gios.brightmarket.data.App
 import com.gios.brightmarket.data.Installed
 import com.gios.brightmarket.data.Sort
+import com.gios.brightmarket.data.Target
 import com.gios.brightmarket.data.Version
+import com.gios.brightmarket.data.target
 import com.gios.brightmarket.hw.WheelScroll
 import com.gios.brightmarket.install.Installer
 
@@ -312,6 +314,8 @@ private fun Choice(title: String, body: String, onClick: () -> Unit) {
 fun SettingsScreen(
     focusEnabled: Boolean,
     nightly: Boolean,
+    /** How many apps have been given a channel of their own. */
+    nightlyOverrides: Int = 0,
     onToggleFocus: () -> Unit,
     onToggleNightly: () -> Unit,
     onScan: () -> Unit,
@@ -379,11 +383,26 @@ fun SettingsScreen(
         Spacer(Modifier.height(gridUnits(0.4f)))
         Text(
             if (nightly) {
-                "Nightly. You get every build as it's made, including the ones " +
+                "Nightly by default. Every build as it's made, including the ones " +
                     "that turn out to be wrong. Newer, and rougher."
             } else {
-                "Official releases only. Nightly builds are made on every change " +
-                    "and aren't offered to you."
+                "Official releases by default. Nightly builds are made on every " +
+                    "change and aren't offered to you."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = Light.ContentSecondary,
+        )
+        Spacer(Modifier.height(gridUnits(0.4f)))
+        // Says where the real control is. A phone-wide channel is the wrong unit:
+        // people opt into nightlies for one app they are helping test, not for
+        // the keyboard. This switch is only what an app falls back to.
+        Text(
+            if (nightlyOverrides == 0) {
+                "This is the default. Any app that publishes nightlies can be set " +
+                    "on its own page."
+            } else {
+                "$nightlyOverrides app${if (nightlyOverrides == 1) "" else "s"} " +
+                    "set on its own page, which wins over this."
             },
             style = MaterialTheme.typography.bodySmall,
             color = Light.ContentSecondary,
@@ -394,7 +413,7 @@ fun SettingsScreen(
         // it just stops offering nightlies, and the next official release
         // catches you up.
         Text(
-            if (nightly) "USE OFFICIAL RELEASES" else "USE NIGHTLY BUILDS",
+            if (nightly) "DEFAULT TO OFFICIAL RELEASES" else "DEFAULT TO NIGHTLY BUILDS",
             style = MaterialTheme.typography.labelLarge,
             modifier = Modifier
                 .lightClickable(onClick = onToggleNightly)
@@ -465,6 +484,13 @@ fun AppRow(
     installedVersionCode: Long?,
     /** The release string on the phone, when one is known. */
     installedVersion: String? = null,
+    /**
+     * What this app would install on its own channel, and whether that counts as
+     * an update. Both are passed in, never worked out here: a row that decides
+     * for itself is a row that can disagree with the page it opens.
+     */
+    target: Target = app.target(false),
+    updatable: Boolean = installedVersionCode != null && target.versionCode > installedVersionCode,
     onClick: () -> Unit,
 ) {
     // Icon beside the text rather than above it, and the two text lines stay
@@ -484,7 +510,7 @@ fun AppRow(
             Text(app.name, style = MaterialTheme.typography.bodyLarge)
             val tag = when {
                 installedVersionCode == null -> null
-                app.versionCode > installedVersionCode -> "UPDATE"
+                updatable -> "UPDATE"
                 else -> "INSTALLED"
             }
             if (tag != null) {
@@ -499,10 +525,11 @@ fun AppRow(
         Text(
             text = when {
                 installedVersionCode == null -> app.summary
-                app.versionCode > installedVersionCode ->
+                updatable ->
                     "${Version.installedLabel(null, installedVersion, installedVersionCode)} → " +
-                        Version.display(app.version)
-                else -> "v${app.version}"
+                        Version.display(target.version) +
+                        if (target.nightly) " · nightly" else ""
+                else -> "v${target.version}" + if (target.nightly) " · nightly" else ""
             },
             style = MaterialTheme.typography.bodySmall,
             color = Light.ContentSecondary,
@@ -528,6 +555,10 @@ fun BrowseScreen(
     installed: Map<String, Long>,
     /** The release string on the phone for a package, when it can be read. */
     installedVersionOf: (String) -> String? = { null },
+    /** What an app would install, on that app's own channel. */
+    targetOf: (App) -> Target = { it.target(false) },
+    /** The one update verdict, shared with the Updates tab and the detail page. */
+    updatableOf: (App) -> Boolean = { false },
     loading: Boolean,
     error: String?,
     onQuery: (String) -> Unit,
@@ -551,7 +582,13 @@ fun BrowseScreen(
                 WheelScroll(listState)
                 LazyColumn(Modifier.weight(1f), state = listState) {
                 items(apps, key = { it.pkg }) { app ->
-                    AppRow(app, installed[app.pkg], installedVersionOf(app.pkg)) { onOpen(app) }
+                    AppRow(
+                        app = app,
+                        installedVersionCode = installed[app.pkg],
+                        installedVersion = installedVersionOf(app.pkg),
+                        target = targetOf(app),
+                        updatable = updatableOf(app),
+                    ) { onOpen(app) }
                 }
                 }
             }
@@ -818,7 +855,8 @@ private fun UpdateRow(entry: Installed, progress: Installer.Progress?, onClick: 
                     "${entry.installedLabel} → ${Version.display(entry.target.version)} · nightly"
                 entry.updatable ->
                     "${entry.installedLabel} → ${Version.display(entry.target.version)}"
-                else -> "v${entry.app.version}"
+                entry.target.nightly -> "v${entry.target.version} · nightly"
+                else -> "v${entry.target.version}"
             },
             style = MaterialTheme.typography.bodySmall,
             color = Light.ContentSecondary,
@@ -837,6 +875,22 @@ private fun UpdateRow(entry: Installed, progress: Installer.Progress?, onClick: 
 fun DetailScreen(
     app: App,
     installedVersionCode: Long?,
+    /**
+     * The build pressing the button will actually install, resolved on this
+     * app's own channel.
+     *
+     * This page used to read [App.version] and [App.versionCode] directly while
+     * `install()` installed `app.target(channel)`. On the nightly channel those
+     * are two different builds, so the page compared the *stable* release
+     * against what was on the phone, decided there was nothing to do, and
+     * labelled the button INSTALLED — for an app the Updates tab was listing as
+     * needing an update. Update-all worked because it never asked this page.
+     * There is one resolved target now, and the label and the installer both
+     * read it.
+     */
+    target: Target,
+    /** The one update verdict, shared with the Updates tab. Never recomputed here. */
+    updatable: Boolean,
     progress: Installer.Progress?,
     /** BrightMarket can't uninstall the process running this screen. */
     isSelf: Boolean,
@@ -852,6 +906,13 @@ fun DetailScreen(
     controlInstalled: Boolean = true,
     /** Open BrightControl's own page, so it can be installed. */
     onOpenControl: (() -> Unit)? = null,
+    /** True when this app is on the nightly channel. */
+    nightlyOn: Boolean = false,
+    /**
+     * Put this one app on or off nightlies. Null when it publishes no
+     * prerelease, because then there is nothing to choose between.
+     */
+    onToggleNightly: (() -> Unit)? = null,
 ) {
     // The system back gesture must leave the page. Without this the only way out
     // was a link at the very bottom, which the screenshot strip pushed below the
@@ -884,7 +945,10 @@ fun DetailScreen(
 
                     Spacer(Modifier.height(gridUnits(0.8f)))
                     Text(
-                        "v${app.version}  ·  ${app.size / 1_000_000}MB  ·  ${app.downloads} downloads",
+                        "v${target.version}" +
+                            (if (target.nightly) " nightly" else "") +
+                            "  ·  ${target.size / 1_000_000}MB" +
+                            "  ·  ${app.downloads} downloads",
                         style = MaterialTheme.typography.bodySmall,
                         color = Light.ContentSecondary,
                     )
@@ -918,7 +982,7 @@ fun DetailScreen(
                 progress is Installer.Progress.AwaitingConfirmation -> "Confirm the install…"
                 progress is Installer.Progress.Failed -> "Retry"
                 installedVersionCode == null -> "Install"
-                app.versionCode > installedVersionCode -> "Update"
+                updatable -> "Update"
                 else -> "Installed"
             }
             val enabled = progress == null || progress is Installer.Progress.Failed
@@ -932,6 +996,34 @@ fun DetailScreen(
                     .lightClickable(enabled = enabled, onClick = onInstall)
                     .padding(vertical = gridUnits(0.4f), horizontal = gridUnits(0.1f)),
             )
+
+            // The channel, beside the app it is about. A single phone-wide switch
+            // put a dialler and a keyboard on prereleases in order to test one
+            // app, which is not what anyone opting in was asking for. Shown only
+            // when the app actually publishes prereleases: an on/off pair that
+            // resolves to the same build either way is a control that does
+            // nothing.
+            if (onToggleNightly != null) {
+                Spacer(Modifier.height(gridUnits(0.8f)))
+                Text(
+                    if (nightlyOn) "NIGHTLY: ON" else "NIGHTLY: OFF",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (nightlyOn) Light.Content else Light.ContentSecondary,
+                    modifier = Modifier
+                        .lightClickable(onClick = onToggleNightly)
+                        .padding(top = gridUnits(0.4f), bottom = gridUnits(0.4f), end = gridUnits(2f)),
+                )
+                Text(
+                    if (nightlyOn) {
+                        "Prereleases for this app only. Every build as it is made, " +
+                            "including the ones that turn out to be wrong."
+                    } else {
+                        "Official releases for this app. It also publishes nightlies."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Light.ContentSecondary,
+                )
+            }
 
             // Apps that need a grant LightOS has no screen for. The README says to run these
             // from a computer; BrightControl can run them here instead.
@@ -1046,7 +1138,7 @@ fun DetailScreen(
                 )
             }
 
-            if (app.notes.isNotBlank()) {
+            if (target.notes.isNotBlank()) {
                 Spacer(Modifier.height(gridUnits(1.5f)))
                 Text(
                     "What's new",
@@ -1054,7 +1146,7 @@ fun DetailScreen(
                     color = Light.ContentSecondary,
                 )
                 Spacer(Modifier.height(gridUnits(0.4f)))
-                MarkdownText(app.notes, style = MaterialTheme.typography.bodySmall)
+                MarkdownText(target.notes, style = MaterialTheme.typography.bodySmall)
             }
 
             Spacer(Modifier.height(gridUnits(2f)))

@@ -457,15 +457,43 @@ class MarkdownTest {
         val installed = mapOf("a.b.c" to 10L)
 
         val (stableUpdates, stableCurrent, _) =
-            Index.partitionInstalled(apps, installed, nightly = false)
+            Index.partitionInstalled(apps, installed, nightlyFor = { false })
         assertTrue(stableUpdates.isEmpty())
         assertEquals(1, stableCurrent.size)
 
         val (nightlyUpdates, _, _) =
-            Index.partitionInstalled(apps, installed, nightly = true)
+            Index.partitionInstalled(apps, installed, nightlyFor = { true })
         assertEquals(1, nightlyUpdates.size)
         assertTrue(nightlyUpdates.first().target.nightly)
         assertEquals(20L, nightlyUpdates.first().target.versionCode)
+    }
+
+    @Test
+    fun `the channel is per app, not per phone`() {
+        // The point of the whole change: one app on prereleases while everything
+        // else stays on official releases. A phone-wide flag could not express
+        // it, so opting in to test one app put the keyboard on nightlies too.
+        val apps = Index.parse(withPreview(20)) + Index.parse(withPreview(20).replace("a.b.c", "x.y.z"))
+        val installed = mapOf("a.b.c" to 10L, "x.y.z" to 10L)
+
+        val (updates, current, _) =
+            Index.partitionInstalled(apps, installed, nightlyFor = { it == "a.b.c" })
+
+        assertEquals(listOf("a.b.c"), updates.map { it.app.pkg })
+        assertTrue(updates.first().target.nightly)
+        assertEquals(listOf("x.y.z"), current.map { it.app.pkg })
+        assertFalse(current.first().target.nightly)
+    }
+
+    @Test
+    fun `a target carries its own size, not the stable build's`() {
+        // The detail page reads every number off the target now. Sizing a
+        // nightly download from the stable release is the same class of mistake
+        // as labelling it with the stable version.
+        val json = withPreview(20).replace("\"size\": 1", "\"size\": 4242")
+        val app = Index.parse(json).first()
+        assertEquals(4242L, app.target(nightly = true).size)
+        assertEquals(1L, app.target(nightly = false).size)
     }
 
     // -----------------------------------------------------------------------
