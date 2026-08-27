@@ -39,6 +39,19 @@ data class App(
     val downloads: Int,
     val firstSeen: String,
     /**
+     * The app's icon, as one 192px PNG on brightmarket.gzl.dev, or blank.
+     *
+     * Blank for the apps that declare no icon at all -- most SDK tools don't,
+     * because LightOS never asked them for one -- and the UI draws a letter for
+     * those. Treat it as "this app has no mark", not as a loading state.
+     *
+     * Not a raw link into the app's repo, unlike [screenshots]: the sources are
+     * a 512px PNG in one repo and a 48px WebP inside another's APK, and the
+     * index repo normalises both to the same size and format before the phone
+     * ever sees them.
+     */
+    val icon: String = "",
+    /**
      * Raw URLs into the app's own repo, in the order the developer named the
      * files. Empty for most apps -- the UI must treat that as normal, not as a
      * loading state.
@@ -244,6 +257,7 @@ object Index {
                 sha256 = latest.getString("sha256"),
                 publishedAt = latest.optString("published", ""),
                 notes = latest.optString("notes", ""),
+                icon = o.optString("icon", ""),
                 downloads = o.optInt("downloads", 0),
                 firstSeen = o.optString("firstSeen", ""),
                 screenshots = o.optJSONArray("screenshots")?.let { arr ->

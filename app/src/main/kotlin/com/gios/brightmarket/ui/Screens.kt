@@ -467,12 +467,19 @@ fun AppRow(
     installedVersion: String? = null,
     onClick: () -> Unit,
 ) {
-    Column(
+    // Icon beside the text rather than above it, and the two text lines stay
+    // exactly as they were: the row keeps the height it always had, so a
+    // fifty-nine app list still scrolls the same distance.
+    Row(
         Modifier
             .fillMaxWidth()
             .lightClickable(onClick = onClick)
-            .padding(horizontal = gridUnits(Grid.INSET), vertical = gridUnits(0.8f))
+            .padding(horizontal = gridUnits(Grid.INSET), vertical = gridUnits(0.8f)),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
+        AppIcon(app.icon, app.name, gridUnits(Grid.ICON))
+        Spacer(Modifier.width(gridUnits(0.8f)))
+        Column(Modifier.weight(1f)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(app.name, style = MaterialTheme.typography.bodyLarge)
             val tag = when {
@@ -502,6 +509,7 @@ fun AppRow(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
+        }
     }
 }
 
@@ -780,12 +788,16 @@ private fun SectionHeader(text: String) {
 
 @Composable
 private fun UpdateRow(entry: Installed, progress: Installer.Progress?, onClick: () -> Unit) {
-    Column(
+    Row(
         Modifier
             .fillMaxWidth()
             .lightClickable(onClick = onClick)
-            .padding(horizontal = gridUnits(Grid.INSET), vertical = gridUnits(0.8f))
+            .padding(horizontal = gridUnits(Grid.INSET), vertical = gridUnits(0.8f)),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
+        AppIcon(entry.app.icon, entry.app.name, gridUnits(Grid.ICON))
+        Spacer(Modifier.width(gridUnits(0.8f)))
+        Column(Modifier.weight(1f)) {
         Text(entry.app.name, style = MaterialTheme.typography.bodyLarge)
         Text(
             text = when {
@@ -808,6 +820,7 @@ private fun UpdateRow(entry: Installed, progress: Installer.Progress?, onClick: 
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
+        }
     }
 }
 
@@ -854,25 +867,35 @@ fun DetailScreen(
         )
 
         Column(Modifier.padding(horizontal = gridUnits(Grid.INSET))) {
-            MarkdownText(app.summary, style = MaterialTheme.typography.bodyMedium)
+            // The icon at four units, beside the summary rather than above it.
+            // The name is already in the top bar; repeating it under a centred
+            // mark would push the install button off the first screen, and that
+            // button is the only reason anyone opens this page.
+            Row(verticalAlignment = Alignment.Top) {
+                AppIcon(app.icon, app.name, gridUnits(4f))
+                Spacer(Modifier.width(gridUnits(0.8f)))
+                Column {
+                    MarkdownText(app.summary, style = MaterialTheme.typography.bodyMedium)
 
-            Spacer(Modifier.height(gridUnits(0.8f)))
-            Text(
-                "v${app.version}  ·  ${app.size / 1_000_000}MB  ·  ${app.downloads} downloads",
-                style = MaterialTheme.typography.bodySmall,
-                color = Light.ContentSecondary,
-            )
+                    Spacer(Modifier.height(gridUnits(0.8f)))
+                    Text(
+                        "v${app.version}  ·  ${app.size / 1_000_000}MB  ·  ${app.downloads} downloads",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Light.ContentSecondary,
+                    )
 
-            // Credit where the app came from. No browser on the phone, so this
-            // is a line of text, not a link -- the full owner/repo is enough to
-            // find upstream from anywhere.
-            if (app.upstream.isNotBlank()) {
-                Spacer(Modifier.height(gridUnits(0.3f)))
-                Text(
-                    "Fork of github.com/${app.upstream}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Light.ContentSecondary,
-                )
+                    // Credit where the app came from. No browser on the phone,
+                    // so this is a line of text, not a link -- the full
+                    // owner/repo is enough to find upstream from anywhere.
+                    if (app.upstream.isNotBlank()) {
+                        Spacer(Modifier.height(gridUnits(0.3f)))
+                        Text(
+                            "Fork of github.com/${app.upstream}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Light.ContentSecondary,
+                        )
+                    }
+                }
             }
 
             if (app.screenshots.isNotEmpty()) {

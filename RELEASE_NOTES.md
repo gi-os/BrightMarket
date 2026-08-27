@@ -4,6 +4,49 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.25
+
+**Every app now shows its icon.**
+
+The list was fifty-nine names in the same typeface. Names are the right thing to
+read once you know what you are looking for; finding a row you half-remember is
+what a mark is for, and every other store has had one for fifteen years.
+
+Icons come from the index, one 192px PNG per app, and they appear in the browse
+list, in Updates, and at four grid units beside the summary on an app's own page.
+The rows keep the height they always had -- the mark sits beside the two lines of
+text rather than above them, so a fifty-nine app list still scrolls the same
+distance.
+
+Getting them was the work, and it happened in the index repo rather than here.
+About half the catalogue is ours and keeps a `docs/icon.png`, which is free to
+read. The other half is not, and there is nothing to guess at: AAPT2 minifies
+resource names, so a real launcher icon is called `res/o-.png` and
+`res/color/mtrl_chip_close_icon_tint.xml` is not an icon at all. The manifest's
+icon attribute is the only reliable way in, followed through the resource table
+and -- for an adaptive icon -- one level further into its background and
+foreground layers, composited, then cropped to the 72/108 safe zone that a
+launcher actually shows. Forty-one of fifty-nine have a mark this way.
+
+The other eighteen declare no icon anywhere. Most are SDK tools, and LightOS
+never asked them for one, so this is a real answer rather than a failure: those
+apps carry no `icon` key, and the row draws the app's first letter. The letter is
+also the loading state, because a letter turning into a mark reads as an image
+arriving where a blank square reads as a broken row.
+
+Icons are cached to disk, not just in memory. A screenshot is looked at once; an
+icon is every row of the list on a phone that is regularly on no network at all,
+and re-downloading fifty-nine of them on each cold start is both the slow way and
+the wrong way to spend someone's data. A cached copy is re-fetched after a week,
+and a stale copy is still drawn if that fetch fails.
+
+**And the catalog now describes the apps as they are.** Every summary for a
+gi-os app was rewritten against its current README. Sports claimed thirteen
+leagues and has twenty-two. Authenticator and Sync still opened with IN
+DEVELOPMENT. Roll's line predated video, BrightLibrary's predated comics and
+Calibre, BrightMusic's predated radio fingerprinting, and BrightControl was still
+described as "the wheel and camera button" about three subsystems ago.
+
 ## v1.24
 
 **"Update all" updated one app, and a refresh on an app's own page couldn't

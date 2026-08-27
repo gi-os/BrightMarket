@@ -25,6 +25,7 @@ class IndexTest {
     {"format":1,"generated":"2026-08-06T23:03:08Z","apps":[
       {"pkg":"com.gios.lighttip","name":"BrightTip","repo":"gi-os/BrightTip",
        "category":"productivity","summary":"Tip calculator.",
+       "icon":"https://brightmarket.gzl.dev/icons/com.gios.lighttip.png",
        "latest":{"version":"1.3.18","versionCode":18,
                  "apk":"https://example/LightTip-v1.3.18.apk","size":4250807,
                  "sha256":"abc","published":"2026-08-05T23:25:49Z","notes":"n"},
@@ -51,6 +52,17 @@ class IndexTest {
         assertTrue(tip.pkg.contains("light"))
         assertEquals(18L, tip.versionCode)
         assertEquals(16, tip.downloads)
+    }
+
+    @Test fun `an app with no icon key parses as having no icon`() {
+        // Eighteen of the fifty-nine declare no icon anywhere, so the absent
+        // key is the normal case and must not read as a URL or a null.
+        val apps = Index.parse(sample)
+        assertEquals(
+            "https://brightmarket.gzl.dev/icons/com.gios.lighttip.png",
+            apps.first().icon,
+        )
+        assertEquals("", apps[1].icon)
     }
 
     @Test fun `each sort actually orders by its own field`() {
