@@ -4,6 +4,34 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.27
+
+**One app could not be updated on its own, and the nightly channel is now set
+per app instead of for the whole phone.**
+
+*The bug.* An app's own page decided whether it had an update by comparing the
+catalogue's stable release against what was on the phone — while the button
+underneath installed whatever the channel resolved to. On nightlies those are two
+different builds, so the page compared the wrong one, concluded there was nothing
+to do, and labelled the button INSTALLED for an app the Updates tab was listing as
+needing an update. There was no way to update that app by itself. Update all kept
+working because it never asked the page. The page and the row now read one
+resolved target and one shared verdict, so they cannot disagree about the same
+app: the version, the download size, the What's new notes and the button label all
+describe the build that will actually install.
+
+*Nightly, per app.* The channel was one switch for the whole phone, which is the
+wrong unit. Nobody wants every app on prereleases; they want the one app they are
+helping test on prereleases and the keyboard left alone. Any app that publishes
+nightlies now has a NIGHTLY line on its own page. Apps that publish none don't
+show the line at all, rather than offering a choice that resolves to the same
+build either way.
+
+*The Settings switch is now the default.* It still does what it always did for
+apps nobody has decided about, and it no longer overrides an app you set by hand —
+so turning it off does not silently drag your one nightly app back to stable.
+Settings says how many apps are set on their own.
+
 ## v1.26
 
 **Icons are black and white and framed, and a description is no longer cut off

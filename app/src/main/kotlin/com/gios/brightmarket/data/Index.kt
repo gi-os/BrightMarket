@@ -119,14 +119,23 @@ data class Target(
     val sha256: String,
     val notes: String,
     val nightly: Boolean,
+    /**
+     * The download size of *this* build, not the app's stable one.
+     *
+     * Here because the detail page was reading [App.size] while installing a
+     * target resolved somewhere else. Every number that page shows now comes
+     * from the same object the installer is handed, so the page cannot describe
+     * one build and install another.
+     */
+    val size: Long = 0,
 )
 
 fun App.target(nightly: Boolean): Target {
     val pv = preview
     return if (nightly && pv != null && pv.versionCode > versionCode) {
-        Target(pv.version, pv.versionCode, pv.apkUrl, pv.sha256, pv.notes, true)
+        Target(pv.version, pv.versionCode, pv.apkUrl, pv.sha256, pv.notes, true, pv.size)
     } else {
-        Target(version, versionCode, apkUrl, sha256, notes, false)
+        Target(version, versionCode, apkUrl, sha256, notes, false, size)
     }
 }
 
@@ -194,7 +203,11 @@ object Index {
         installed: Map<String, Long>,
         selfPkg: String = "",
         followed: Set<String> = emptySet(),
-        nightly: Boolean = false,
+        /**
+         * Whether a given package is on the nightly channel. Per package, not
+         * one flag for the phone: see [Nightly].
+         */
+        nightlyFor: (String) -> Boolean = { false },
         /** PackageManager's versionName for a package, when it can be read. */
         versionNameOf: (String) -> String? = { null },
         /** What BrightMarket recorded installing for a package. */
@@ -206,7 +219,7 @@ object Index {
                     app = app,
                     installedVersionCode = it,
                     isSelf = app.pkg == selfPkg,
-                    target = app.target(nightly),
+                    target = app.target(nightlyFor(app.pkg)),
                     installedVersionName = versionNameOf(app.pkg),
                     installedByMarket = marketVersionOf(app.pkg),
                 )

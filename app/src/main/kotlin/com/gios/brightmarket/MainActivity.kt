@@ -25,6 +25,7 @@ import com.gios.brightmarket.data.Followed
 import com.gios.brightmarket.data.Index
 import com.gios.brightmarket.data.Installed
 import com.gios.brightmarket.data.InstalledVersions
+import com.gios.brightmarket.data.Nightly
 import com.gios.brightmarket.data.Obtainium
 import com.gios.brightmarket.data.Sort
 import com.gios.brightmarket.data.Tracked
@@ -55,7 +56,24 @@ class MainActivity : ComponentActivity() {
 
     private var onboarded by mutableStateOf(false)
     private var focusMode by mutableStateOf(false)
+
+    /**
+     * The channel an app falls back to when nobody has chosen one for it.
+     *
+     * Kept as a default rather than removed: it is what the Settings switch has
+     * always meant, and turning it off must not silently discard a per-app
+     * opt-in. The per-app choices live in [Nightly].
+     */
     private var nightly by mutableStateOf(false)
+
+    /**
+     * Explicit per-app channel choices, held in state so the pages recompose.
+     *
+     * Read once into memory: the browse list draws the whole catalogue, and a
+     * SharedPreferences lookup inside a row would run on every recomposition of
+     * every row.
+     */
+    private var nightlyChoices by mutableStateOf<Map<String, Boolean>>(emptyMap())
 
     private var progress by mutableStateOf<Installer.Progress?>(null)
 
@@ -200,6 +218,7 @@ class MainActivity : ComponentActivity() {
         onboarded = Focus.onboarded(this)
         focusMode = Focus.enabled(this)
         nightly = Focus.nightly(this)
+        nightlyChoices = Nightly.all(this)
         handleLink(intent)
 
         setContent {
@@ -258,6 +277,11 @@ class MainActivity : ComponentActivity() {
                     DetailScreen(
                         app = app,
                         installedVersionCode = installed[app.pkg],
+                        target = targetOf(app),
+                        // Built through Installed(...).updatable rather than
+                        // compared by hand, so this page and the row that opened
+                        // it can never disagree about the same app.
+                        updatable = updatable(app),
                         progress = progress,
                         isSelf = app.pkg == packageName,
                         onInstall = { install(app) },
@@ -281,6 +305,12 @@ class MainActivity : ComponentActivity() {
                                 toast("Couldn't open BrightControl.")
                             }
                         },
+                        nightlyOn = nightlyOn(app.pkg),
+                        // Null when there is no prerelease to switch to, so the
+                        // row is absent rather than present and inert.
+                        onToggleNightly = if (app.preview != null) {
+                            { toggleNightly(app) }
+                        } else null,
                         onOpenControl = {
                             // BrightControl is in the catalog, so the honest answer to "you
                             // need it" is its own page rather than a link somewhere else.
@@ -294,7 +324,7 @@ class MainActivity : ComponentActivity() {
 
                 val (updates, upToDate, notInstalled) =
                     Index.partitionInstalled(
-                        apps, installed, packageName, followed, nightly,
+                        apps, installed, packageName, followed, ::nightlyOn,
                         versionNameOf = { Installer.installedVersionName(this@MainActivity, it) },
                         marketVersionOf = { InstalledVersions.get(this@MainActivity, it) },
                     )
@@ -338,6 +368,8 @@ class MainActivity : ComponentActivity() {
                                 InstalledVersions.get(this@MainActivity, it)
                                     ?: Installer.installedVersionName(this@MainActivity, it)
                             },
+                            targetOf = ::targetOf,
+                            updatableOf = ::updatable,
                             loading = loading,
                             error = error,
                             onQuery = { query = it },
@@ -372,13 +404,14 @@ class MainActivity : ComponentActivity() {
                         else -> SettingsScreen(
                             focusEnabled = focusMode,
                             nightly = nightly,
+                            nightlyOverrides = nightlyChoices.size,
                             onToggleNightly = {
                                 val next = !nightly
                                 Focus.setNightly(this@MainActivity, next)
                                 nightly = next
                                 toast(
-                                    if (next) "Nightly builds on"
-                                    else "Official releases only"
+                                    if (next) "New apps default to nightly"
+                                    else "New apps default to official releases"
                                 )
                             },
                             onToggleFocus = {
@@ -708,7 +741,7 @@ class MainActivity : ComponentActivity() {
                                 app = app,
                                 installedVersionCode = onPhone,
                                 isSelf = app.pkg == packageName,
-                                target = app.target(nightly),
+                                target = targetOf(app),
                                 installedVersionName =
                                     Installer.installedVersionName(this@MainActivity, only),
                                 installedByMarket =
@@ -721,7 +754,7 @@ class MainActivity : ComponentActivity() {
                             when {
                                 app == null -> "That app isn't in the index any more."
                                 state == null ->
-                                    "${Version.display(app.target(nightly).version)} · not installed"
+                                    "${Version.display(targetOf(app).version)} · not installed"
                                 state.updatable ->
                                     "Update available · ${state.installedLabel} → " +
                                         Version.display(state.target.version)
@@ -734,7 +767,7 @@ class MainActivity : ComponentActivity() {
                         // before you pressed it.
                         val (updates, _, _) =
                             Index.partitionInstalled(
-                        apps, installed, packageName, followed, nightly,
+                        apps, installed, packageName, followed, ::nightlyOn,
                         versionNameOf = { Installer.installedVersionName(this@MainActivity, it) },
                         marketVersionOf = { InstalledVersions.get(this@MainActivity, it) },
                     )
@@ -757,6 +790,46 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Which channel one app is on. The single answer every route asks.
+     *
+     * The bug this exists to stop: the detail page worked this out for itself
+     * from the stable fields while `install()` resolved a target from the
+     * channel, so on nightlies the page said INSTALLED about an app that had an
+     * update, and the only working route was update-all -- which never asked the
+     * page.
+     */
+    private fun nightlyOn(pkg: String): Boolean = nightlyChoices[pkg] ?: nightly
+
+    /** The build [app]'s page will show and its button will install. */
+    private fun targetOf(app: App) = app.target(nightlyOn(app.pkg))
+
+    /** Whether [app] has an update on its own channel. One verdict, one place. */
+    private fun updatable(app: App): Boolean {
+        val code = installed[app.pkg] ?: return false
+        return Installed(
+            app = app,
+            installedVersionCode = code,
+            isSelf = app.pkg == packageName,
+            target = targetOf(app),
+            installedVersionName = Installer.installedVersionName(this, app.pkg),
+            installedByMarket = InstalledVersions.get(this, app.pkg),
+        ).updatable
+    }
+
+    private fun toggleNightly(app: App) {
+        val next = !nightlyOn(app.pkg)
+        // Written even when it matches the Settings default, on purpose: an app
+        // somebody has decided about must not change channel later because the
+        // default moved under it.
+        Nightly.set(this, app.pkg, next)
+        nightlyChoices = Nightly.all(this)
+        toast(
+            if (next) "${app.name} is on nightly builds"
+            else "${app.name} is on official releases"
+        )
+    }
+
     private fun refreshInstalled() {
         installed = apps.mapNotNull { app ->
             Installer.installedVersionCode(this, app.pkg)?.let { app.pkg to it }
@@ -768,7 +841,7 @@ class MainActivity : ComponentActivity() {
         // the detail page, a row, update-all -- lands on the same build. Two
         // places deciding this independently is how a UI ends up promising a
         // nightly and installing stable.
-        val t = app.target(nightly)
+        val t = targetOf(app)
         lifecycleScope.launch {
             Installer.install(
                 ctx = this@MainActivity,
@@ -805,7 +878,7 @@ class MainActivity : ComponentActivity() {
             // queued behind it would never run. See Index.selfLast.
             val queue = Index.selfLast(targets, packageName)
             for (app in queue) {
-                val t = app.target(nightly)
+                val t = targetOf(app)
                 val ok = Installer.install(
                     ctx = this@MainActivity,
                     apkUrl = t.apkUrl,
