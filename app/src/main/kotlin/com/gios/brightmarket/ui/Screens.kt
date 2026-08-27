@@ -506,7 +506,12 @@ fun AppRow(
             },
             style = MaterialTheme.typography.bodySmall,
             color = Light.ContentSecondary,
-            maxLines = 2,
+            // Four, not two. The catalogue's summaries say what an app does now
+            // -- BrightControl's names six subsystems -- and two lines ended
+            // most of them in an ellipsis, which is the one place where a
+            // description is no use at all. The bound in the index repo's
+            // validator is 320 characters, which is what four lines hold.
+            maxLines = 4,
             overflow = TextOverflow.Ellipsis,
         )
         }

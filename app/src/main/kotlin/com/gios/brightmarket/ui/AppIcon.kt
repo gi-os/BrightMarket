@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
@@ -20,6 +21,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -155,13 +157,31 @@ fun AppIcon(url: String, name: String, size: Dp) {
         if (url.isNotBlank() && bitmap == null) bitmap = IconCache.load(context, url)
     }
 
-    Box(Modifier.size(size), contentAlignment = Alignment.Center) {
+    // A hairline white frame, on both the mark and the letter.
+    //
+    // These icons are white artwork on a black ground, drawn on a black screen:
+    // with no edge, the icon has no size -- a small mark and a large one look
+    // like different amounts of nothing, and a row of them doesn't line up
+    // because there is no visible left edge to line up on. The frame is the
+    // only box in the app, and it is here because the icons are the only thing
+    // in the app that isn't type.
+    Box(
+        Modifier
+            .size(size)
+            .border(1.dp, Light.Content),
+        contentAlignment = Alignment.Center,
+    ) {
         val bmp = bitmap
         if (bmp != null) {
             Image(
                 bitmap = bmp.asImageBitmap(),
                 contentDescription = null,
-                modifier = Modifier.size(size),
+                // Inside the frame, not under it: an icon that fills its box to
+                // the pixel paints over the hairline on any edge where its own
+                // artwork is light. Sized rather than padded, because a padding
+                // modifier after a size is measured against the box it was
+                // already given and reads a pixel wider on one edge.
+                modifier = Modifier.size(size - 2.dp),
                 contentScale = ContentScale.Fit,
             )
         } else {

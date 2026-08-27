@@ -4,6 +4,33 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.26
+
+**Icons are black and white and framed, and a description is no longer cut off
+after two lines.**
+
+*Black and white.* The conversion happens in the index repo, not here, and that
+is the point: one answer, both clients, nothing to remember. Three of the
+catalogued apps ship the stock green Android robot and one ships an orange bird,
+and on this phone a colour icon isn't a brighter version of a grey one, it is the
+wrong thing in the row.
+
+*Framed.* A hairline white border around every icon, and around the lettered
+fallback too. White artwork on a black ground, drawn on a black screen, has no
+visible edge — so a small mark and a large one read as different amounts of
+nothing, and a column of them has no left edge to line up on. The image is drawn
+two dp inside the frame rather than under it, because an icon that fills its box
+to the pixel paints over the hairline on any edge where its own artwork is light.
+It is the only box in the app, and it is here because the icons are the only
+thing in the app that isn't type.
+
+*Four lines, not two.* v1.25 rewrote every summary to say what an app does now,
+and then the browse row ended most of them in an ellipsis — which is the one
+place a description is no use at all. Rows show four lines, and the index repo's
+bound moved from 200 characters to 320 to match what the phone will actually
+draw. Six summaries that had been trimmed to fit the old limit are back in full,
+BrightControl's among them: it names six subsystems and had been cut to three.
+
 ## v1.25
 
 **Every app now shows its icon.**
