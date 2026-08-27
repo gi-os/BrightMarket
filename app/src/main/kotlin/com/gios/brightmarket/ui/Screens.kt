@@ -1011,7 +1011,7 @@ fun DetailScreen(
                     color = if (nightlyOn) Light.Content else Light.ContentSecondary,
                     modifier = Modifier
                         .lightClickable(onClick = onToggleNightly)
-                        .padding(vertical = gridUnits(0.4f), end = gridUnits(2f)),
+                        .padding(top = gridUnits(0.4f), bottom = gridUnits(0.4f), end = gridUnits(2f)),
                 )
                 Text(
                     if (nightlyOn) {
