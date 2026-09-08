@@ -287,6 +287,18 @@ class MainActivity : ComponentActivity() {
                         onInstall = { install(app) },
                         onUninstall = { uninstall(app.pkg) },
                         onBack = { selected = null },
+                        // The left-hand side of "v1.22.40 -> v1.23.02" on the
+                        // action bar. Named the same way the Updates tab names
+                        // it, from the same two sources in the same order, so
+                        // one page cannot call the installed build something
+                        // the other one doesn't.
+                        installedLabel = installed[app.pkg]?.let { code ->
+                            Version.installedLabel(
+                                InstalledVersions.get(this@MainActivity, app.pkg),
+                                Installer.installedVersionName(this@MainActivity, app.pkg),
+                                code,
+                            )
+                        },
                         // One app, not the whole catalog. For an indexed app the
                         // catalog is a single static file, so re-reading it is
                         // one request either way — what this saves is the walk

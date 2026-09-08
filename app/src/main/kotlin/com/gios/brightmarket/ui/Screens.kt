@@ -21,10 +21,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import com.gios.brightmarket.data.App
 import com.gios.brightmarket.data.Installed
 import com.gios.brightmarket.data.Sort
@@ -33,6 +35,7 @@ import com.gios.brightmarket.data.Version
 import com.gios.brightmarket.data.target
 import com.gios.brightmarket.hw.WheelScroll
 import com.gios.brightmarket.install.Installer
+import java.util.Locale
 
 // ---------------------------------------------------------------------------
 // Chrome
@@ -871,6 +874,182 @@ private fun UpdateRow(entry: Installed, progress: Installer.Progress?, onClick: 
 // Detail
 // ---------------------------------------------------------------------------
 
+/**
+ * A drawn rule.
+ *
+ * LightOS separates a bar from content with space and never with a line -- but
+ * a rule is the one structural device it does use *inside* content, and this
+ * page needs it four times over. Drawn rather than Material's divider, which
+ * brings its own thickness and colour tokens.
+ */
+@Composable
+private fun Rule(color: Color = Light.ContentSecondary, fraction: Float = 1f) {
+    Canvas(
+        Modifier
+            .fillMaxWidth(fraction)
+            .height(1.dp)
+    ) {
+        drawLine(
+            color = color,
+            start = Offset(0f, size.height / 2),
+            end = Offset(size.width, size.height / 2),
+            strokeWidth = size.height,
+        )
+    }
+}
+
+/** The same rule stood on end, dividing the cells of the stat rail. */
+@Composable
+private fun VRule(color: Color = Light.ContentSecondary) {
+    Canvas(
+        Modifier
+            .width(1.dp)
+            .fillMaxHeight()
+    ) {
+        drawLine(
+            color = color,
+            start = Offset(size.width / 2, 0f),
+            end = Offset(size.width / 2, size.height),
+            strokeWidth = size.width,
+        )
+    }
+}
+
+/**
+ * The numbers the decision is made on, in one rail of hairlines.
+ *
+ * These used to be a single comma-separated line under the summary --
+ * "v1.23.02 · 7MB · 1284 downloads" -- which is four facts written as one
+ * sentence, so none of them could be found without reading all of them. In
+ * cells they can be scanned, and the size sits next to the button that spends
+ * it.
+ *
+ * Hairlines, not a card: nothing here is filled, rounded or raised, and the
+ * rules are the same 1dp the icon frame uses.
+ */
+@Composable
+private fun StatRail(stats: List<Pair<String, String>>) {
+    Column {
+        Rule()
+        // Intrinsic height so the cell dividers can fill the row. Without it
+        // fillMaxHeight inside a Row of unconstrained height measures as zero
+        // and the vertical rules simply don't draw.
+        Row(Modifier.height(IntrinsicSize.Min)) {
+            stats.forEach { (key, value) ->
+                VRule()
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .padding(
+                            start = gridUnits(0.6f),
+                            end = gridUnits(0.2f),
+                            top = gridUnits(0.5f),
+                            bottom = gridUnits(0.6f),
+                        )
+                ) {
+                    Text(
+                        key,
+                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.14f.em),
+                        color = Light.ContentSecondary,
+                        maxLines = 1,
+                    )
+                    Spacer(Modifier.height(gridUnits(0.2f)))
+                    Text(
+                        value,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            VRule()
+        }
+        Rule()
+    }
+}
+
+/**
+ * The one thing on this page anyone came to press.
+ *
+ * Full width, 3.8 units tall, between two rules, and above the screenshots so
+ * it is reachable without scrolling. The bar carries the state: the label and
+ * the hint both change as an install runs, while the bar itself never moves and
+ * never changes size, so a thumb that found it once does not have to find it
+ * again. It replaced a bare word of text whose tap target was the width of the
+ * word.
+ */
+@Composable
+private fun ActionBar(
+    label: String,
+    hint: String,
+    units: Float = 3.8f,
+    labelColor: Color = Light.Content,
+    ruleColor: Color = Light.Content,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    Column(Modifier.lightClickable(enabled = enabled, onClick = onClick)) {
+        Rule(ruleColor)
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(gridUnits(units))
+                .padding(horizontal = gridUnits(0.2f)),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                label.uppercase(),
+                style = MaterialTheme.typography.labelLarge,
+                color = labelColor,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (hint.isNotBlank()) {
+                Spacer(Modifier.width(gridUnits(0.4f)))
+                Text(
+                    hint.uppercase(),
+                    style = MaterialTheme.typography.bodySmall.copy(letterSpacing = 0.1f.em),
+                    color = Light.ContentSecondary,
+                    maxLines = 1,
+                )
+            }
+        }
+        Rule(ruleColor)
+    }
+}
+
+private val MONTHS = listOf(
+    "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
+)
+
+/**
+ * "2026-09-05T11:22:33Z" -> "05 SEP". A rail cell has room for a day and a
+ * month and nothing else.
+ *
+ * Substring rather than a date parser, on purpose: this is the release date as
+ * GitHub published it, and running it through a formatter would shift it into
+ * the phone's timezone -- turning "published on the 1st" into "31 AUG" for
+ * anyone west of UTC, for a date nobody is doing arithmetic on.
+ */
+private fun shortDate(iso: String): String {
+    if (iso.length < 10) return "—"
+    val month = iso.substring(5, 7).toIntOrNull() ?: return "—"
+    if (month !in 1..12) return "—"
+    return "${iso.substring(8, 10)} ${MONTHS[month - 1]}"
+}
+
+/**
+ * Download size to one decimal.
+ *
+ * The line this replaced divided by a million in integer arithmetic, so every
+ * app under 1MB read "0MB" and 7.4 and 7.9 were the same number.
+ */
+private fun megabytes(bytes: Long): String =
+    if (bytes <= 0) "—" else String.format(Locale.US, "%.1f MB", bytes / 1_000_000.0)
+
+private fun thousands(n: Int): String = String.format(Locale.US, "%,d", n)
+
 @Composable
 fun DetailScreen(
     app: App,
@@ -897,6 +1076,16 @@ fun DetailScreen(
     onInstall: () -> Unit,
     onUninstall: () -> Unit,
     onBack: () -> Unit,
+    /**
+     * What is on the phone right now, named the way the Updates tab names it.
+     *
+     * Supplied rather than derived, because deriving it needs both
+     * PackageManager's versionName and the release string BrightMarket recorded
+     * installing, and the Activity is where both of those live. Null falls back
+     * to the versionCode, which is the fallback [Version.installedLabel] makes
+     * anyway.
+     */
+    installedLabel: String? = null,
     /** Re-check this one app, rather than the whole catalog. */
     onRefresh: (() -> Unit)? = null,
     refreshing: Boolean = false,
@@ -914,242 +1103,382 @@ fun DetailScreen(
      */
     onToggleNightly: (() -> Unit)? = null,
 ) {
+    // -1 for "no screenshot open". Keyed on the package so opening a different
+    // app's page can't inherit an index from the last one.
+    var zoom by remember(app.pkg) { mutableStateOf(-1) }
+
+    // Whether BrightControl has already been launched for this app on this
+    // visit. It is the only thing this side can honestly know: BrightControl
+    // reports nothing back, so the bar says "handed over" and never "granted".
+    var handedOver by remember(app.pkg) { mutableStateOf(false) }
+
     // The system back gesture must leave the page. Without this the only way out
     // was a link at the very bottom, which the screenshot strip pushed below the
-    // fold -- the page read as a dead end.
-    BackHandler(onBack = onBack)
+    // fold -- the page read as a dead end. An open screenshot takes the press
+    // first, so back closes the picture rather than the page under it.
+    BackHandler {
+        if (zoom >= 0) zoom = -1 else onBack()
+    }
 
-    Column(
+    // The date belonging to the build the button will install, which on the
+    // nightly channel is not the stable release's date.
+    val publishedAt =
+        if (target.nightly) app.preview?.publishedAt.orEmpty().ifBlank { app.publishedAt }
+        else app.publishedAt
+
+    val enabled = progress == null || progress is Installer.Progress.Failed
+
+    // Label, hint and the sentence under the bar, all out of one decision.
+    // They were three separate conditionals before, which is how the button and
+    // the text beneath it came to describe different things.
+    val (action, hint, status) = when {
+        progress is Installer.Progress.Downloading -> Triple(
+            if (progress.total > 0) "Downloading ${progress.bytes * 100 / progress.total}%"
+            else "Downloading…",
+            if (progress.total > 0) {
+                String.format(Locale.US, "%.1f", progress.bytes / 1_000_000.0) +
+                    " / " + megabytes(progress.total)
+            } else "",
+            "Checking the download against the hash in the index once it lands. " +
+                "Nothing installs until you confirm it.",
+        )
+        progress is Installer.Progress.Verifying -> Triple(
+            "Verifying…",
+            "SHA-256",
+            "Matching the file against the hash the index builder generated from " +
+                "the release asset.",
+        )
+        progress is Installer.Progress.AwaitingConfirmation -> Triple(
+            "Confirm the install…",
+            "System dialog",
+            "Android's own installer has it now. This screen is waiting for the result.",
+        )
+        progress is Installer.Progress.Failed -> Triple("Retry", "", progress.reason)
+        installedVersionCode == null -> Triple(
+            "Install",
+            megabytes(target.size),
+            "Not on the phone yet. Downloads from the GitHub release, checked " +
+                "against the hash in the index, then Android asks you to confirm.",
+        )
+        updatable -> Triple(
+            "Update",
+            (installedLabel ?: Version.installedLabel(null, null, installedVersionCode ?: 0L)) +
+                " → " + Version.display(target.version),
+            Version.display(target.version) +
+                (
+                    if (shortDate(publishedAt) == "—") " is the newest release."
+                    else " was published ${shortDate(publishedAt)}."
+                    ) +
+                " " + megabytes(target.size) + " over your connection, then the " +
+                "phone asks you to confirm.",
+        )
+        else -> Triple(
+            "Installed",
+            "Up to date",
+            "On the phone and current. It checks again whenever you pull the " +
+                "catalog down.",
+        )
+    }
+
+    Box(
         Modifier
             .fillMaxSize()
             .background(Light.Background)
-            .verticalScroll(rememberScrollState())
     ) {
-        TopBar(
-            app.name.uppercase(),
-            onBack = onBack,
-            onRefresh = onRefresh,
-            refreshing = refreshing,
-        )
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+        ) {
+            TopBar(
+                app.name.uppercase(),
+                onBack = onBack,
+                onRefresh = onRefresh,
+                refreshing = refreshing,
+            )
 
-        Column(Modifier.padding(horizontal = gridUnits(Grid.INSET))) {
-            // The icon at four units, beside the summary rather than above it.
-            // The name is already in the top bar; repeating it under a centred
-            // mark would push the install button off the first screen, and that
-            // button is the only reason anyone opens this page.
-            Row(verticalAlignment = Alignment.Top) {
-                AppIcon(app.icon, app.name, gridUnits(4f))
-                Spacer(Modifier.width(gridUnits(0.8f)))
-                Column {
-                    MarkdownText(app.summary, style = MaterialTheme.typography.bodyMedium)
+            Column(Modifier.padding(horizontal = gridUnits(Grid.INSET))) {
+                // The icon at four units, beside the summary rather than above it.
+                // The name is already in the top bar; repeating it under a centred
+                // mark would push the install button off the first screen, and that
+                // button is the only reason anyone opens this page.
+                Row(verticalAlignment = Alignment.Top) {
+                    AppIcon(app.icon, app.name, gridUnits(4f))
+                    Spacer(Modifier.width(gridUnits(0.8f)))
+                    Column {
+                        MarkdownText(app.summary, style = MaterialTheme.typography.bodyMedium)
 
-                    Spacer(Modifier.height(gridUnits(0.8f)))
-                    Text(
-                        "v${target.version}" +
-                            (if (target.nightly) " nightly" else "") +
-                            "  ·  ${target.size / 1_000_000}MB" +
-                            "  ·  ${app.downloads} downloads",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Light.ContentSecondary,
-                    )
-
-                    // Credit where the app came from. No browser on the phone,
-                    // so this is a line of text, not a link -- the full
-                    // owner/repo is enough to find upstream from anywhere.
-                    if (app.upstream.isNotBlank()) {
-                        Spacer(Modifier.height(gridUnits(0.3f)))
+                        // Provenance in one line: where the build comes from,
+                        // what it forks, and the package it installs as. No
+                        // browser on the phone, so this is text rather than a
+                        // link -- owner/repo is enough to find upstream from
+                        // anywhere, and the package name is what you would go
+                        // looking for in Settings. The version, size and
+                        // download count used to be crammed in here; they are
+                        // the rail below now.
+                        Spacer(Modifier.height(gridUnits(0.6f)))
                         Text(
-                            "Fork of github.com/${app.upstream}",
+                            buildString {
+                                append(app.repo)
+                                if (app.upstream.isNotBlank()) {
+                                    append("  ·  fork of ${app.upstream}")
+                                }
+                                append("  ·  ${app.pkg}")
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = Light.ContentSecondary,
                         )
                     }
                 }
-            }
 
-            if (app.screenshots.isNotEmpty()) {
                 Spacer(Modifier.height(gridUnits(1.2f)))
-                ScreenshotStrip(app.screenshots)
-            }
-
-            Spacer(Modifier.height(gridUnits(1.5f)))
-
-            val label = when {
-                progress is Installer.Progress.Downloading ->
-                    if (progress.total > 0) "Downloading ${progress.bytes * 100 / progress.total}%"
-                    else "Downloading…"
-                progress is Installer.Progress.Verifying -> "Verifying…"
-                progress is Installer.Progress.AwaitingConfirmation -> "Confirm the install…"
-                progress is Installer.Progress.Failed -> "Retry"
-                installedVersionCode == null -> "Install"
-                updatable -> "Update"
-                else -> "Installed"
-            }
-            val enabled = progress == null || progress is Installer.Progress.Failed
-            Text(
-                text = label.uppercase(),
-                style = MaterialTheme.typography.labelLarge,
-                color = if (enabled) Light.Content else Light.ContentSecondary,
-                // The one you came here to press, so it gets a real target
-                // rather than the bare glyph box it had.
-                modifier = Modifier
-                    .lightClickable(enabled = enabled, onClick = onInstall)
-                    .padding(vertical = gridUnits(0.4f), horizontal = gridUnits(0.1f)),
-            )
-
-            // The channel, beside the app it is about. A single phone-wide switch
-            // put a dialler and a keyboard on prereleases in order to test one
-            // app, which is not what anyone opting in was asking for. Shown only
-            // when the app actually publishes prereleases: an on/off pair that
-            // resolves to the same build either way is a control that does
-            // nothing.
-            if (onToggleNightly != null) {
-                Spacer(Modifier.height(gridUnits(0.8f)))
-                Text(
-                    if (nightlyOn) "NIGHTLY: ON" else "NIGHTLY: OFF",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (nightlyOn) Light.Content else Light.ContentSecondary,
-                    modifier = Modifier
-                        .lightClickable(onClick = onToggleNightly)
-                        .padding(top = gridUnits(0.4f), bottom = gridUnits(0.4f), end = gridUnits(2f)),
+                StatRail(
+                    listOf(
+                        // Named for the channel it came off, so a nightly build
+                        // number is never read as a release.
+                        (if (target.nightly) "NIGHTLY" else "VERSION") to
+                            (Version.normalize(target.version) ?: "—"),
+                        "SIZE" to megabytes(target.size),
+                        "GETS" to thousands(app.downloads),
+                        "UPDATED" to shortDate(publishedAt),
+                    )
                 )
-                Text(
-                    if (nightlyOn) {
-                        "Prereleases for this app only. Every build as it is made, " +
-                            "including the ones that turn out to be wrong."
+
+                Spacer(Modifier.height(gridUnits(1.2f)))
+                ActionBar(
+                    label = action,
+                    hint = hint,
+                    labelColor = if (installedVersionCode != null && !updatable && progress == null) {
+                        Light.ContentSecondary
                     } else {
-                        "Official releases for this app. It also publishes nightlies."
+                        Light.Content
                     },
+                    enabled = enabled,
+                    onClick = onInstall,
+                )
+
+                if (progress is Installer.Progress.Downloading && progress.total > 0) {
+                    Spacer(Modifier.height(gridUnits(0.4f)))
+                    // Drawn, not Material's LinearProgressIndicator: that component
+                    // animates and carries a tonal track, neither of which exists in
+                    // LightOS.
+                    Canvas(
+                        Modifier
+                            .fillMaxWidth(0.8f)
+                            .height(gridUnits(0.2f))
+                    ) {
+                        drawLine(
+                            color = Light.ContentSecondary,
+                            start = Offset(0f, size.height / 2),
+                            end = Offset(size.width, size.height / 2),
+                            strokeWidth = size.height,
+                        )
+                        drawLine(
+                            color = Light.Content,
+                            start = Offset(0f, size.height / 2),
+                            end = Offset(
+                                size.width * progress.bytes.toFloat() / progress.total,
+                                size.height / 2,
+                            ),
+                            strokeWidth = size.height,
+                        )
+                    }
+                }
+
+                // What the bar is doing, in a sentence. Every state has one: a
+                // drawn line and a spinner both say "wait", and neither says
+                // what for.
+                Spacer(Modifier.height(gridUnits(0.6f)))
+                Text(
+                    status,
                     style = MaterialTheme.typography.bodySmall,
                     color = Light.ContentSecondary,
                 )
-            }
 
-            // Apps that need a grant LightOS has no screen for. The README says to run these
-            // from a computer; BrightControl can run them here instead.
-            if (app.adbSetup.isNotEmpty()) {
-                Spacer(Modifier.height(gridUnits(1.2f)))
-                Text(
-                    "NEEDS ADB SETUP",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Light.ContentSecondary,
-                )
-                Spacer(Modifier.height(gridUnits(0.4f)))
-                Text(
-                    if (controlInstalled) {
-                        "This app needs permissions the phone has no settings screen for. " +
-                            "BrightControl can grant them without a computer. It will show you " +
-                            "exactly what runs before anything happens."
-                    } else {
-                        "This app needs permissions the phone has no settings screen for. " +
-                            "Granting them without a computer needs BrightControl, which isn't " +
-                            "installed. Install it and finish its ADB setup first."
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Light.ContentSecondary,
-                )
-                Spacer(Modifier.height(gridUnits(0.5f)))
-                app.adbSetup.forEach { line ->
+                // Below the button, not above it. The strip used to sit between
+                // the summary and the install, which put sixteen units of
+                // pictures in front of the one thing the page is for.
+                if (app.screenshots.isNotEmpty()) {
+                    Spacer(Modifier.height(gridUnits(1.5f)))
+                    ScreenshotStrip(app.screenshots, onOpen = { zoom = it })
+                }
+
+                // Apps that need a grant LightOS has no screen for. The README says to run these
+                // from a computer; BrightControl can run them here instead.
+                if (app.adbSetup.isNotEmpty()) {
+                    Spacer(Modifier.height(gridUnits(1.5f)))
                     Text(
-                        line,
+                        "Needs ADB setup",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Light.ContentSecondary,
+                    )
+                    Spacer(Modifier.height(gridUnits(0.4f)))
+                    Text(
+                        if (controlInstalled) {
+                            "This app needs permissions the phone has no settings screen for. " +
+                                "BrightControl can grant them without a computer. It will show you " +
+                                "exactly what runs before anything happens."
+                        } else {
+                            "This app needs permissions the phone has no settings screen for. " +
+                                "Granting them without a computer needs BrightControl, which isn't " +
+                                "installed. Install it and finish its ADB setup first."
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = Light.ContentSecondary,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
                     )
-                    Spacer(Modifier.height(gridUnits(0.2f)))
-                }
-                Spacer(Modifier.height(gridUnits(0.4f)))
-                Text(
-                    text = if (controlInstalled) "ACTIVATE ADB" else "GET BRIGHTCONTROL",
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier
-                        .lightClickable {
-                            if (controlInstalled) onActivateAdb?.invoke() else onOpenControl?.invoke()
+
+                    // The commands themselves, set behind a rule. They are
+                    // quoted material -- someone else's words, which the person
+                    // approving them should be able to tell apart from ours --
+                    // and indenting them is how print has always said so.
+                    Spacer(Modifier.height(gridUnits(0.7f)))
+                    Row(Modifier.height(IntrinsicSize.Min)) {
+                        VRule()
+                        Column(Modifier.padding(start = gridUnits(0.6f))) {
+                            app.adbSetup.forEach { line ->
+                                Text(
+                                    line,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Light.ContentSecondary,
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Spacer(Modifier.height(gridUnits(0.4f)))
+                            }
                         }
-                        .padding(vertical = gridUnits(0.4f), horizontal = gridUnits(0.1f)),
-                )
-            }
+                    }
 
-            if (progress is Installer.Progress.Downloading && progress.total > 0) {
-                Spacer(Modifier.height(gridUnits(0.4f)))
-                // Drawn, not Material's LinearProgressIndicator: that component
-                // animates and carries a tonal track, neither of which exists in
-                // LightOS.
-                Canvas(Modifier.fillMaxWidth(0.8f).height(gridUnits(0.2f))) {
-                    drawLine(
-                        color = Light.ContentSecondary,
-                        start = Offset(0f, size.height / 2),
-                        end = Offset(size.width, size.height / 2),
-                        strokeWidth = size.height,
+                    // The same bar in secondary weight, because the order is
+                    // install first and grant second. Half a unit shorter than
+                    // the install bar, so a thumb travelling down the page
+                    // cannot mistake one for the other.
+                    Spacer(Modifier.height(gridUnits(0.8f)))
+                    ActionBar(
+                        label = when {
+                            !controlInstalled -> "Get BrightControl"
+                            handedOver -> "Handed over…"
+                            else -> "Activate ADB"
+                        },
+                        hint = when {
+                            !controlInstalled -> "Not installed"
+                            handedOver -> "BrightControl"
+                            app.adbSetup.size == 1 -> "1 grant"
+                            else -> "${app.adbSetup.size} grants"
+                        },
+                        units = 3.3f,
+                        labelColor = if (handedOver && controlInstalled) {
+                            Light.ContentSecondary
+                        } else {
+                            Light.Content
+                        },
+                        ruleColor = Light.ContentSecondary,
+                        onClick = {
+                            if (controlInstalled) {
+                                handedOver = true
+                                onActivateAdb?.invoke()
+                            } else {
+                                onOpenControl?.invoke()
+                            }
+                        },
                     )
-                    drawLine(
-                        color = Light.Content,
-                        start = Offset(0f, size.height / 2),
-                        end = Offset(
-                            size.width * progress.bytes.toFloat() / progress.total,
-                            size.height / 2,
-                        ),
-                        strokeWidth = size.height,
+                    Spacer(Modifier.height(gridUnits(0.6f)))
+                    Text(
+                        when {
+                            !controlInstalled ->
+                                "The commands are here either way — a computer with adb can " +
+                                    "run them as they read."
+                            handedOver ->
+                                "BrightControl rebuilds each line pinned to ${app.pkg} and " +
+                                    "refuses anything that names a different package. Tap again " +
+                                    "if it didn't come up."
+                            else -> "Nothing runs until you confirm it in BrightControl."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Light.ContentSecondary,
                     )
                 }
-            }
-            if (progress is Installer.Progress.Failed) {
-                Spacer(Modifier.height(gridUnits(0.4f)))
-                Text(
-                    progress.reason,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Light.ContentSecondary,
-                )
-            }
 
-            // Only once it is actually on the phone, and never for BrightMarket
-            // itself.
-            if (installedVersionCode != null && !isSelf && progress == null) {
-                // There was 0.6 units of spacer here and 0.5 of it was eaten by
-                // the uninstall's own top padding, which extends its tap target
-                // upwards -- leaving about 1dp of real gap between "update" and
-                // "remove this app", against the 8dp Android asks for. Hence the
-                // fat-finger.
-                //
-                // Now: a wide gap, a rule to say this is a different kind of
-                // thing, another gap, and no top padding on the target so it
-                // cannot creep back up into the space.
-                Spacer(Modifier.height(gridUnits(1.6f)))
-                Canvas(Modifier.fillMaxWidth(0.35f).height(1.dp)) {
-                    drawLine(
+                if (target.notes.isNotBlank()) {
+                    Spacer(Modifier.height(gridUnits(1.5f)))
+                    Text(
+                        "What's new",
+                        style = MaterialTheme.typography.titleMedium,
                         color = Light.ContentSecondary,
-                        start = Offset(0f, size.height / 2),
-                        end = Offset(size.width, size.height / 2),
-                        strokeWidth = size.height,
+                    )
+                    Spacer(Modifier.height(gridUnits(0.4f)))
+                    MarkdownText(target.notes, style = MaterialTheme.typography.bodySmall)
+                }
+
+                // The channel, beside the app it is about. A single phone-wide switch
+                // put a dialler and a keyboard on prereleases in order to test one
+                // app, which is not what anyone opting in was asking for. Shown only
+                // when the app actually publishes prereleases: an on/off pair that
+                // resolves to the same build either way is a control that does
+                // nothing.
+                if (onToggleNightly != null) {
+                    Spacer(Modifier.height(gridUnits(1.6f)))
+                    Text(
+                        if (nightlyOn) "NIGHTLY: ON" else "NIGHTLY: OFF",
+                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.2f.em),
+                        color = if (nightlyOn) Light.Content else Light.ContentSecondary,
+                        modifier = Modifier
+                            .lightClickable(onClick = onToggleNightly)
+                            .padding(
+                                top = gridUnits(0.4f),
+                                bottom = gridUnits(0.4f),
+                                end = gridUnits(2f),
+                            ),
+                    )
+                    Text(
+                        if (nightlyOn) {
+                            "Prereleases for this app only. Every build as it is made, " +
+                                "including the ones that turn out to be wrong."
+                        } else {
+                            "Official releases for this app. It also publishes nightlies."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Light.ContentSecondary,
                     )
                 }
-                Spacer(Modifier.height(gridUnits(1.2f)))
-                Text(
-                    "UNINSTALL",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Light.ContentSecondary,
-                    modifier = Modifier
-                        .lightClickable(onClick = onUninstall)
-                        // No top padding, on purpose: padding inside the
-                        // clickable is part of what you can hit, and upwards is
-                        // exactly where it must not grow.
-                        .padding(bottom = gridUnits(0.6f), end = gridUnits(2f)),
-                )
-            }
 
-            if (target.notes.isNotBlank()) {
-                Spacer(Modifier.height(gridUnits(1.5f)))
-                Text(
-                    "What's new",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Light.ContentSecondary,
-                )
-                Spacer(Modifier.height(gridUnits(0.4f)))
-                MarkdownText(target.notes, style = MaterialTheme.typography.bodySmall)
-            }
+                // Only once it is actually on the phone, and never for BrightMarket
+                // itself.
+                if (installedVersionCode != null && !isSelf && progress == null) {
+                    // There was 0.6 units of spacer here and 0.5 of it was eaten by
+                    // the uninstall's own top padding, which extends its tap target
+                    // upwards -- leaving about 1dp of real gap between "update" and
+                    // "remove this app", against the 8dp Android asks for. Hence the
+                    // fat-finger.
+                    //
+                    // Now: a wide gap, a rule to say this is a different kind of
+                    // thing, another gap, and no top padding on the target so it
+                    // cannot creep back up into the space. It is also last on the
+                    // page now, a full screen below the install bar.
+                    Spacer(Modifier.height(gridUnits(1.6f)))
+                    Rule(fraction = 0.35f)
+                    Spacer(Modifier.height(gridUnits(1.2f)))
+                    Text(
+                        "UNINSTALL",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Light.ContentSecondary,
+                        modifier = Modifier
+                            .lightClickable(onClick = onUninstall)
+                            // No top padding, on purpose: padding inside the
+                            // clickable is part of what you can hit, and upwards is
+                            // exactly where it must not grow.
+                            .padding(bottom = gridUnits(0.6f), end = gridUnits(2f)),
+                    )
+                }
 
-            Spacer(Modifier.height(gridUnits(2f)))
+                Spacer(Modifier.height(gridUnits(2f)))
+            }
+        }
+
+        // Over the page, top bar included: at full size the picture is the
+        // screen, and a bar left showing above it would be the only chrome in
+        // the app sitting on top of content.
+        if (zoom >= 0) {
+            ScreenshotZoom(app.screenshots, zoom) { zoom = -1 }
         }
     }
 }

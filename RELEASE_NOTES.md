@@ -4,6 +4,47 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.28
+
+**An app's page was redesigned around the button. The numbers you decide on are
+a rail of their own, the install is a full-width bar that says what it is doing,
+and screenshots open at full size.**
+
+*The numbers.* Version, download size, download count and release date used to
+be one comma-separated line under the description — four facts written as a
+sentence, so none of them could be found without reading all of them. They are
+four cells in a rail now, divided by hairlines. Size sits next to the button
+that spends it. A build off the nightly channel is labelled NIGHTLY rather than
+VERSION, so a prerelease number is never read as a release. Sizes are given to
+one decimal: the old line divided by a million in integer arithmetic, so
+everything under a megabyte read "0MB" and 7.4 and 7.9 were the same number.
+
+*The button.* Install was a single word of text, and its tap target was the
+width of the word. It is a full-width bar between two rules now, above the
+screenshots and reachable without scrolling, with the state on the left and the
+detail on the right — UPDATE with `v1.27.40 → v1.28.02`, INSTALL with the
+download size, DOWNLOADING with the megabytes so far, VERIFYING with SHA-256.
+The bar never moves and never changes size, so a thumb that found it once does
+not have to aim again. Under it, a sentence saying what is happening and what
+happens next; the drawn progress line stayed, because a line says "wait" and a
+sentence says what for.
+
+*Screenshots open.* They sat between the description and the install, which put
+a screen of pictures in front of the one thing the page is for — they are below
+the button now, and tapping one opens it full size with a counter and a tap to
+close. Back closes the picture rather than the page under it.
+
+*ADB setup reads as a second step.* The grants an app needs are the same bar in
+secondary weight, half a unit shorter, below the install: the order is install,
+then grant. The commands are set behind a rule, because they are someone else's
+words and the person approving them should be able to tell them apart from ours.
+The bar reports what BrightMarket actually knows — that BrightControl was handed
+the request — and never claims a grant landed, because BrightControl does not
+report back.
+
+*Provenance in one line.* Where the build comes from, what it forks, and the
+package it installs as, on the line the version numbers vacated.
+
 ## v1.27
 
 **One app could not be updated on its own, and the nightly channel is now set
