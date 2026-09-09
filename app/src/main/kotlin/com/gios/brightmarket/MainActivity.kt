@@ -587,7 +587,7 @@ class MainActivity : ComponentActivity() {
 
     private fun installFromUrl(url: String) {
         val key = url
-        lifecycleScope.launch {
+        guarded("install the APK at that address") {
             Installer.install(
                 ctx = this@MainActivity,
                 apkUrl = url,
@@ -610,7 +610,7 @@ class MainActivity : ComponentActivity() {
 
     private fun installTracked(row: TrackedRow) {
         val url = row.apkUrl ?: return
-        lifecycleScope.launch {
+        guarded("install ${row.repo}") {
             val key = row.pkg ?: row.repo
             Installer.install(
                 ctx = this@MainActivity,
@@ -652,7 +652,7 @@ class MainActivity : ComponentActivity() {
      *   for an automatic check.
      */
     private fun refreshTracked(only: String? = null, force: Boolean = false) {
-        lifecycleScope.launch {
+        guarded("check the tracked repositories for updates") {
             val all = Tracked.all(this@MainActivity)
             val entries = if (only == null) all else all.filter { it.repo.equals(only, true) }
             val rows = withContext(Dispatchers.IO) {
@@ -715,8 +715,54 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun refresh() {
+    /**
+     * Run something in the activity's scope so that a throw becomes a reported fault instead of a
+     * dead app.
+     *
+     * ### Why every launch needed this
+     *
+     * "Sometimes fails and crashes when checking for an update." Every function this file reaches
+     * into is careful — `Index.fetch` returns through `runCatching`, `Tracked.resolve` catches
+     * `Exception` and falls back to its cache, `Installer.install` returns a `Result`,
+     * `installedVersionCode` swallows `NameNotFoundException`, `shortDate` bounds its own
+     * substrings. The gap was never in the callees. It was that seven bare `lifecycleScope.launch`
+     * blocks sat on top of them, and an uncaught throw in a coroutine launched from a scope with no
+     * handler goes straight to the default handler and takes the process with it. So the whole
+     * update check was one missed guard away from a crash, anywhere, and the crash arrived with
+     * nothing attached — which is why this could be described but not diagnosed.
+     *
+     * Wrapping the launches is the fix that does not depend on having found the one bad line. The
+     * next occurrence names the exception class and its message in a report instead of killing the
+     * app, and if there is a real bug underneath, that report is what finds it.
+     *
+     * `CancellationException` is rethrown. Swallowing it is how a coroutine that has been told to
+     * stop carries on running against a destroyed activity, which trades a crash for something
+     * harder to see.
+     */
+    private fun guarded(what: String, block: suspend () -> Unit) {
         lifecycleScope.launch {
+            try {
+                block()
+            } catch (c: kotlinx.coroutines.CancellationException) {
+                throw c
+            } catch (t: Throwable) {
+                Trouble.record(what, "${t::class.java.simpleName}: ${t.message}")
+                // Every transient the launches own. A throw skips whatever line
+                // would have cleared these, and a progress bar with nothing
+                // behind it is worse than an error: it says work is happening.
+                progress = null
+                progressFor = emptyMap()
+                loading = false
+                manualRefresh = false
+                refreshOnlyPkg = null
+                refreshingRepo = null
+                toast("Something went wrong. The report chip has the details.")
+            }
+        }
+    }
+
+    private fun refresh() {
+        guarded("check for updates") {
             loading = true
             error = null
             runCatching { withContext(Dispatchers.IO) { Index.fetch(BuildConfig.INDEX_URL) } }
@@ -854,7 +900,7 @@ class MainActivity : ComponentActivity() {
         // places deciding this independently is how a UI ends up promising a
         // nightly and installing stable.
         val t = targetOf(app)
-        lifecycleScope.launch {
+        guarded("install ${app.pkg}") {
             Installer.install(
                 ctx = this@MainActivity,
                 apkUrl = t.apkUrl,
@@ -868,6 +914,14 @@ class MainActivity : ComponentActivity() {
                 // complete without one on some builds; re-reading here costs a
                 // package-manager query and closes that gap.
                 refreshInstalled()
+            }.onFailure {
+                // There was no onFailure here at all, so a download that failed
+                // left the progress bar on screen at whatever fraction it had
+                // reached, with nothing moving and no way to dismiss it. A
+                // failure is exactly when the bar has to come down.
+                progress = null
+                Trouble.record("install ${app.pkg}", "${it::class.java.simpleName}: ${it.message}")
+                toast("Couldn't install ${app.name}.")
             }
         }
     }
@@ -880,7 +934,7 @@ class MainActivity : ComponentActivity() {
      * indication which app each belongs to.
      */
     private fun updateAll(targets: List<App>) {
-        lifecycleScope.launch {
+        guarded("update every app that had one") {
             // Not named `installed`: that is the property refreshInstalled()
             // writes, and shadowing it here is how a counter and a map of
             // package versions end up looking like the same thing.

@@ -4,6 +4,46 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.29
+
+**Checking for an update can no longer take the app down with it, and a failure now says what it
+was.** Reported as "sometimes fails and crashes when checking for an update", and the interesting
+part is where the fault was not.
+
+Every function the update check reaches into is careful. `Index.fetch` comes back through
+`runCatching`. `Tracked.resolve` catches `Exception` and falls back to its cache rather than
+replacing a good answer with a wrong one. `Installer.install` returns a `Result`.
+`installedVersionCode` swallows `NameNotFoundException`. `shortDate` bounds both its substrings and
+range-checks the month. `pickApkHref` returns null on an empty list before it ever calls `first()`.
+Reading down that path looking for the throw finds nothing.
+
+The gap was one level up. Seven bare `lifecycleScope.launch` blocks sat on top of all that care, and
+an uncaught throw inside a coroutine launched from a scope with no handler goes to the default
+handler and ends the process. So the whole update check was one missed guard away from a crash,
+anywhere in it, and the crash arrived carrying nothing — which is exactly why this could be
+described and not diagnosed.
+
+**Six of those launches are now wrapped.** A throw is caught, filed through the report chip with the
+exception class and its message, and shown as one line: *Something went wrong. The report chip has
+the details.* `CancellationException` is rethrown rather than swallowed, because a coroutine that
+has been told to stop and carries on against a destroyed activity is a worse bug than the one being
+fixed.
+
+This is deliberately not a claim to have found the bad line. It is the repair that does not depend
+on having found it: the check cannot crash the app any more, and the next occurrence arrives as a
+report with a class name in it. If something underneath is genuinely broken, that report is what
+finds it.
+
+**Two real faults turned up while wiring it.** A failed install had no `onFailure` at all, so a
+download that died left the progress bar frozen on screen at whatever fraction it reached, with
+nothing moving behind it and no way to dismiss it — a bar that says work is happening is worse than
+an error message. And neither of the two unlisted-app install paths cleared their per-app progress
+entry on the way out, so the same stuck bar could be left against a tracked row. Both clear now, on
+the failure path as well as the success one.
+
+The one launch left bare is the Obtainium import, which has its own early returns and is not part of
+the update check.
+
 ## v1.28
 
 **An app's page was redesigned around the button. The numbers you decide on are
