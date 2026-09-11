@@ -319,8 +319,13 @@ fun SettingsScreen(
     nightly: Boolean,
     /** How many apps have been given a channel of their own. */
     nightlyOverrides: Int = 0,
+    /** Whether this phone is counted in the catalogue's install figures. */
+    pulseEnabled: Boolean = true,
+    /** The literal bytes the next count would send. Read only when asked for. */
+    pulseSample: () -> String = { "" },
     onToggleFocus: () -> Unit,
     onToggleNightly: () -> Unit,
+    onTogglePulse: () -> Unit = {},
     onScan: () -> Unit,
     onImport: () -> Unit,
 ) {
@@ -420,6 +425,64 @@ fun SettingsScreen(
             style = MaterialTheme.typography.labelLarge,
             modifier = Modifier
                 .lightClickable(onClick = onToggleNightly)
+                .padding(vertical = gridUnits(0.4f)),
+        )
+
+        Spacer(Modifier.height(gridUnits(2f)))
+        Text("COUNTING", style = MaterialTheme.typography.titleMedium, color = Light.ContentSecondary)
+        Spacer(Modifier.height(gridUnits(0.4f)))
+        // Download counts cannot say how many people have an app: a mirror
+        // pulling a release all month reads the same as a thousand installs.
+        // This is the thing that can say it, and it is worth being exact about
+        // what it counts -- installs made through BrightMarket, on this phone,
+        // of apps the catalogue already lists in public.
+        Text(
+            if (pulseEnabled) {
+                "On. When you install, update or remove a catalogue app, this " +
+                    "sends the app's name and the version it moved to. Nothing else."
+            } else {
+                "Off. This phone is not counted."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = Light.ContentSecondary,
+        )
+        Spacer(Modifier.height(gridUnits(0.4f)))
+        Text(
+            "There is no install id, no device id and no account, so two of " +
+                "these can't be recognised as coming from the same phone.",
+            style = MaterialTheme.typography.bodySmall,
+            color = Light.ContentSecondary,
+        )
+        Spacer(Modifier.height(gridUnits(0.6f)))
+
+        // Shown rather than described. A sentence claiming anonymity is worth
+        // less than the bytes, and the bytes are short enough to read.
+        var showSample by remember { mutableStateOf(false) }
+        var sample by remember { mutableStateOf("") }
+        if (showSample) {
+            Text(
+                sample,
+                style = MaterialTheme.typography.bodySmall,
+                color = Light.ContentSecondary,
+            )
+            Spacer(Modifier.height(gridUnits(0.6f)))
+        }
+        Text(
+            if (showSample) "HIDE WHAT IS SENT" else "SHOW WHAT IS SENT",
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier
+                .lightClickable(onClick = {
+                    if (!showSample) sample = pulseSample()
+                    showSample = !showSample
+                })
+                .padding(vertical = gridUnits(0.4f)),
+        )
+        Spacer(Modifier.height(gridUnits(0.2f)))
+        Text(
+            if (pulseEnabled) "DON'T COUNT THIS PHONE" else "COUNT THIS PHONE",
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier
+                .lightClickable(onClick = onTogglePulse)
                 .padding(vertical = gridUnits(0.4f)),
         )
 

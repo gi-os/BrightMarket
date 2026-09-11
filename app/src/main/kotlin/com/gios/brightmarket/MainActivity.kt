@@ -27,6 +27,7 @@ import com.gios.brightmarket.data.Installed
 import com.gios.brightmarket.data.InstalledVersions
 import com.gios.brightmarket.data.Nightly
 import com.gios.brightmarket.data.Obtainium
+import com.gios.brightmarket.data.Pulse
 import com.gios.brightmarket.data.Sort
 import com.gios.brightmarket.data.Tracked
 import com.gios.brightmarket.data.Version
@@ -65,6 +66,9 @@ class MainActivity : ComponentActivity() {
      * opt-in. The per-app choices live in [Nightly].
      */
     private var nightly by mutableStateOf(false)
+
+    /** Whether this phone is counted in the catalogue's install figures. */
+    private var pulse by mutableStateOf(true)
 
     /**
      * Explicit per-app channel choices, held in state so the pages recompose.
@@ -218,6 +222,7 @@ class MainActivity : ComponentActivity() {
         onboarded = Focus.onboarded(this)
         focusMode = Focus.enabled(this)
         nightly = Focus.nightly(this)
+        pulse = Pulse.enabled(this)
         nightlyChoices = Nightly.all(this)
         handleLink(intent)
 
@@ -417,6 +422,17 @@ class MainActivity : ComponentActivity() {
                             focusEnabled = focusMode,
                             nightly = nightly,
                             nightlyOverrides = nightlyChoices.size,
+                            pulseEnabled = pulse,
+                            pulseSample = { Pulse.preview(this@MainActivity, apps.map { a -> a.pkg }) },
+                            onTogglePulse = {
+                                val next = !pulse
+                                Pulse.setEnabled(this@MainActivity, next)
+                                pulse = next
+                                toast(
+                                    if (next) "Counting installs again"
+                                    else "This phone is no longer counted"
+                                )
+                            },
                             onToggleNightly = {
                                 val next = !nightly
                                 Focus.setNightly(this@MainActivity, next)
@@ -778,6 +794,10 @@ class MainActivity : ComponentActivity() {
                         it.firstOrNull { a -> a.pkg == open.pkg } ?: open
                     }
                     refreshInstalled()
+                    // Anonymous install counting, scoped to the catalogue that
+                    // just arrived. Sends nothing at all on the runs where
+                    // nothing changed, which is nearly all of them.
+                    Pulse.sync(this@MainActivity, it.map { a -> a.pkg })
                     pendingPkg?.let { pkg ->
                         selected = apps.firstOrNull { a -> a.pkg == pkg }
                         if (selected == null) toast("That app isn't in the index.")

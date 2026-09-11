@@ -4,6 +4,32 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.30
+
+**The catalogue can now say how many people have an app, and which version they are on.** It never
+could before, and the reason is worth stating: GitHub counts downloads, which is bytes leaving a
+release. A mirror pulling an APK every ten minutes reads exactly like people installing it. One app
+in the catalogue drew 87 downloads a day for a month from something that was never a phone.
+
+So BrightMarket now counts installs instead. When you install, update or remove an app the
+catalogue lists, it sends the package name and the version it moved to. Nothing else goes with it.
+There is no install id, no device id, no advertising id and no account, so two of these cannot be
+recognised as having come from the same phone. That is a property of what is sent, not a promise
+about what happens afterwards.
+
+What comes back out is the number of copies of each app that exist, and the split across versions.
+The arithmetic is the same one the download history already uses: everyone who arrived at a version
+minus everyone who left it, with updates cancelling out.
+
+Two things are true about that number and both are printed next to it. It counts installs made
+through BrightMarket, so an app you sideloaded with adb or fetched with Obtainium is not in it. And
+it is the catalogue's own list of packages, which is public, so this is not a reading of what is on
+your phone.
+
+Settings has a COUNTING section with a switch and a SHOW WHAT IS SENT button that prints the literal
+bytes. The first count after this update is marked as an app you already had rather than a new
+install, so the day this ships does not read as a thousand installs that never happened.
+
 ## v1.29
 
 **Checking for an update can no longer take the app down with it, and a failure now says what it
