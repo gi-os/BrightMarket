@@ -1302,7 +1302,17 @@ fun DetailScreen(
                         (if (target.nightly) "NIGHTLY" else "VERSION") to
                             (Version.normalize(target.version) ?: "—"),
                         "SIZE" to megabytes(target.size),
-                        "GETS" to thousands(app.downloads),
+                        // Users REPLACE gets here rather than joining them. A fifth
+                        // cell on a 240dp screen clips its own label, and of the two
+                        // this is the one worth the space: a get is bytes leaving a
+                        // release, which a mirror runs up without a phone existing.
+                        // Gets stay on the web catalogue, where there is room for both.
+                        //
+                        // Zero means nobody has reported yet, not nobody uses it, so
+                        // it falls back rather than printing "0 USERS" to someone who
+                        // is holding the app in their hand.
+                        if (app.users > 0) "USERS" to thousands(app.users)
+                        else "GETS" to thousands(app.downloads),
                         "UPDATED" to shortDate(publishedAt),
                     )
                 )

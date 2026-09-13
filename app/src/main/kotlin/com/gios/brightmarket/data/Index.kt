@@ -37,6 +37,18 @@ data class App(
     val publishedAt: String,
     val notes: String,
     val downloads: Int,
+    /**
+     * People who have this app, through BrightMarket, as the catalogue counts them.
+     *
+     * Zero means "nobody has reported yet", not "nobody uses it" -- the index only
+     * carries the field when it is above zero, so a build that could not reach the
+     * counter leaves every app at zero rather than claiming an empty catalogue.
+     * Treat it as unknown and show nothing.
+     *
+     * Not comparable to [downloads]. A download is bytes leaving a release, which a
+     * mirror can run up without a phone ever existing; this is a copy that landed.
+     */
+    val users: Int = 0,
     val firstSeen: String,
     /**
      * The app's icon, as one 192px PNG on brightmarket.gzl.dev, or blank.
@@ -96,6 +108,7 @@ enum class Sort(val label: String) {
     UPDATED("Updated"),
     NEW("New"),
     POPULAR("Popular"),
+    USERS("Users"),
 }
 
 /**
@@ -272,6 +285,7 @@ object Index {
                 notes = latest.optString("notes", ""),
                 icon = o.optString("icon", ""),
                 downloads = o.optInt("downloads", 0),
+                users = o.optInt("users", 0),
                 firstSeen = o.optString("firstSeen", ""),
                 screenshots = o.optJSONArray("screenshots")?.let { arr ->
                     (0 until arr.length()).mapNotNull { j ->
@@ -356,5 +370,9 @@ object Index {
         Sort.UPDATED -> apps.sortedByDescending { it.publishedAt }
         Sort.NEW -> apps.sortedByDescending { it.firstSeen }
         Sort.POPULAR -> apps.sortedByDescending { it.downloads }
+        // Gets count bytes leaving a release, so a mirror can put an app at the top
+        // of POPULAR without a phone ever existing. This orders by copies that
+        // actually landed. Apps nobody has reported fall in behind, by gets.
+        Sort.USERS -> apps.sortedWith(compareByDescending<App> { it.users }.thenByDescending { it.downloads })
     }
 }

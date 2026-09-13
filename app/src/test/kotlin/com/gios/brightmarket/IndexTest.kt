@@ -31,7 +31,7 @@ class IndexTest {
                  "sha256":"abc","published":"2026-08-05T23:25:49Z","notes":"n"},
        "screenshots":[{"url":"https://raw.example/a.png","name":"a.png","size":1},
                       {"url":"https://raw.example/b.png","name":"b.png","size":2}],
-       "downloads":16,"firstSeen":"2026-01-02"},
+       "downloads":16,"users":40,"firstSeen":"2026-01-02"},
       {"pkg":"com.gios.lightnoise","name":"BrightNoise","repo":"gi-os/BrightNoise",
        "category":"media","summary":"White noise.",
        "latest":{"version":"1.1.9","versionCode":9,
@@ -70,6 +70,20 @@ class IndexTest {
         assertEquals("BrightTip", Index.sort(apps, Sort.UPDATED).first().name)
         assertEquals("BrightNoise", Index.sort(apps, Sort.NEW).first().name)
         assertEquals("BrightNoise", Index.sort(apps, Sort.POPULAR).first().name)
+        // The one with FEWER gets. A mirror can run downloads up without a phone
+        // existing, so these two orders are allowed to disagree and this is the
+        // case that catches USERS quietly reading `downloads`.
+        assertEquals("BrightTip", Index.sort(apps, Sort.USERS).first().name)
+    }
+
+    @Test fun `an app nobody has reported reads as unknown, not as zero users`() {
+        val apps = Index.parse(sample)
+        assertEquals(40, apps[0].users)
+        // The field is absent for this one: the index only writes it above zero, so a
+        // build that could not reach the counter must not look like an empty catalogue.
+        assertEquals(0, apps[1].users)
+        // ... and it still sorts behind the app that has users, by gets.
+        assertEquals("BrightNoise", Index.sort(apps, Sort.USERS).last().name)
     }
 
     @Test fun `obtainium import reads the modern export shape`() {

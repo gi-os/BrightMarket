@@ -4,6 +4,21 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.31
+
+**Sort by users, and see how many people have an app rather than how many times it was downloaded.**
+
+The catalogue now counts installs, so the app can show them. A new **Users** sort orders by copies
+that actually landed on a phone, and an app's page reads USERS where it used to read GETS.
+
+The two are not the same number and the difference is the point. A get is a download of a release
+asset, which a mirror or a crawler runs up without a phone ever existing: one app in this catalogue
+drew 87 a day for a month from something that was never a person. Users are copies that landed and
+said so.
+
+A count only appears once somebody has reported. An app with none shows gets as before, because
+zero here means nobody has counted yet, not nobody uses it.
+
 ## v1.30
 
 **The catalogue can now say how many people have an app, and which version they are on.** It never
