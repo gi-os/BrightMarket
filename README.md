@@ -2,6 +2,8 @@
 
 # BrightMarket
 
+[**⬇ Download the latest APK**](https://github.com/gi-os/BrightMarket/releases/latest) · free, open source.
+
 An app store for the Light Phone III. It finds sideloaded apps, installs them, and
 tells you when they have updates. Everything in it is free and open source, and
 every download comes from a GitHub release.
