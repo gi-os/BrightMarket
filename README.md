@@ -172,3 +172,9 @@ The Light Phone does not sponsor or endorse any of these. Built by
 [Giovanni Lupo](https://github.com/gi-os) — if this one is useful to you, a ⭐ helps the next
 person find it.
 <!-- bright-footer:end -->
+
+## Support
+
+These apps are free, open, and built on my own time. Sponsorship pays the bills that don't go away: build servers, test hardware, and the crash reporter that keeps them shipping. Donation or not my code is always free for the world to use.
+
+[Sponsor on GitHub](https://github.com/sponsors/gi-os)
