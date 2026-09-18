@@ -77,7 +77,7 @@ object Pulse {
      * because a failure here is not the user's problem and must never reach the
      * screen. A missed send is retried on the next launch.
      */
-    fun sync(ctx: Context, catalogue: List<String>) {
+    fun sync(ctx: Context, catalogue: Map<String, String>) {
         if (!enabled(ctx) || catalogue.isEmpty()) return
         val app = ctx.applicationContext
         Thread {
@@ -85,7 +85,7 @@ object Pulse {
         }.apply { isDaemon = true }.start()
     }
 
-    internal fun syncBlocking(ctx: Context, catalogue: List<String>) {
+    internal fun syncBlocking(ctx: Context, catalogue: Map<String, String>) {
         val current = scan(ctx, catalogue)
         val previous = readMap(prefs(ctx).getString(KEY_SNAPSHOT, null))
 
@@ -102,12 +102,25 @@ object Pulse {
         flush(ctx)
     }
 
-    /** Installed catalogue apps, package to version name. */
-    private fun scan(ctx: Context, catalogue: List<String>): Map<String, String> {
+    /**
+     * Installed catalogue apps, package to version name.
+     *
+     * [catalogue] maps each listed package to the certificate the index pinned for it, because a
+     * package name on its own does not say whose app this is. Three unrelated projects ship
+     * `app.lightphonekeyboard`; counting all of them as one put strangers' version numbers on one
+     * app's row and inflated its user count by a third. A copy signed by anybody else is not the
+     * app the catalogue is describing, so it is not counted — and because it then drops out of the
+     * snapshot, the next sync after this ships emits a removal and the old figures correct
+     * themselves rather than needing the stored counters edited.
+     *
+     * An unreadable certificate counts, deliberately. See [Signer]: not knowing is not evidence.
+     */
+    private fun scan(ctx: Context, catalogue: Map<String, String>): Map<String, String> {
         val pm = ctx.packageManager
         val out = LinkedHashMap<String, String>()
-        for (pkg in catalogue.distinct()) {
+        for ((pkg, signer) in catalogue) {
             val info = runCatching { pm.getPackageInfo(pkg, 0) }.getOrNull() ?: continue
+            if (Signer.foreign(signer, Signer.of(ctx, pkg))) continue
             out[pkg] = version(info.versionName)
         }
         return out
@@ -223,7 +236,7 @@ object Pulse {
      * rather than described: a sentence about anonymity is worth less than the
      * literal bytes.
      */
-    fun preview(ctx: Context, catalogue: List<String>): String {
+    fun preview(ctx: Context, catalogue: Map<String, String>): String {
         val outbox = JSONArray(prefs(ctx).getString(KEY_OUTBOX, "[]"))
         if (outbox.length() > 0) return JSONObject().put("v", 1).put("events", outbox).toString(2)
         // Nothing queued, so show the shape the next change would take, using

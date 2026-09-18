@@ -28,6 +28,7 @@ import com.gios.brightmarket.data.InstalledVersions
 import com.gios.brightmarket.data.Nightly
 import com.gios.brightmarket.data.Obtainium
 import com.gios.brightmarket.data.Pulse
+import com.gios.brightmarket.data.Signer
 import com.gios.brightmarket.data.Sort
 import com.gios.brightmarket.data.Tracked
 import com.gios.brightmarket.data.Version
@@ -344,6 +345,7 @@ class MainActivity : ComponentActivity() {
                         apps, installed, packageName, followed, ::nightlyOn,
                         versionNameOf = { Installer.installedVersionName(this@MainActivity, it) },
                         marketVersionOf = { InstalledVersions.get(this@MainActivity, it) },
+                        signerOf = { Signer.of(this@MainActivity, it) },
                     )
 
                 // Three destinations, which is the SDK's hard ceiling for a
@@ -423,7 +425,7 @@ class MainActivity : ComponentActivity() {
                             nightly = nightly,
                             nightlyOverrides = nightlyChoices.size,
                             pulseEnabled = pulse,
-                            pulseSample = { Pulse.preview(this@MainActivity, apps.map { a -> a.pkg }) },
+                            pulseSample = { Pulse.preview(this@MainActivity, apps.associate { a -> a.pkg to a.signer }) },
                             onTogglePulse = {
                                 val next = !pulse
                                 Pulse.setEnabled(this@MainActivity, next)
@@ -797,7 +799,7 @@ class MainActivity : ComponentActivity() {
                     // Anonymous install counting, scoped to the catalogue that
                     // just arrived. Sends nothing at all on the runs where
                     // nothing changed, which is nearly all of them.
-                    Pulse.sync(this@MainActivity, it.map { a -> a.pkg })
+                    Pulse.sync(this@MainActivity, it.associate { a -> a.pkg to a.signer })
                     pendingPkg?.let { pkg ->
                         selected = apps.firstOrNull { a -> a.pkg == pkg }
                         if (selected == null) toast("That app isn't in the index.")
@@ -848,6 +850,7 @@ class MainActivity : ComponentActivity() {
                         apps, installed, packageName, followed, ::nightlyOn,
                         versionNameOf = { Installer.installedVersionName(this@MainActivity, it) },
                         marketVersionOf = { InstalledVersions.get(this@MainActivity, it) },
+                        signerOf = { Signer.of(this@MainActivity, it) },
                     )
                         toast(
                             when (updates.size) {

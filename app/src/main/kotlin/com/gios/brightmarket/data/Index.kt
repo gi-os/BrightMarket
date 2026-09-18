@@ -51,6 +51,14 @@ data class App(
     val users: Int = 0,
     val firstSeen: String,
     /**
+     * SHA-256 of the certificate this app's releases are signed with, lowercase hex, or blank.
+     *
+     * Pinned by the submission checks and written into the index by the builder. It is what makes
+     * "is this the app we think it is" answerable — a package name is not an identity, and the
+     * same applicationId is shipped by unrelated forks. See [Signer].
+     */
+    val signer: String = "",
+    /**
      * The app's icon, as one 192px PNG on brightmarket.gzl.dev, or blank.
      *
      * Blank for the apps that declare no icon at all -- most SDK tools don't,
@@ -163,13 +171,25 @@ data class Installed(
     val installedVersionName: String? = null,
     /** The release string BrightMarket recorded installing, if it installed it. */
     val installedByMarket: String? = null,
+    /**
+     * True when the copy on the phone is signed by somebody other than whoever the index pinned —
+     * a different project that happens to use the same applicationId, or a local build.
+     *
+     * Never a guess: false whenever either certificate is unknown. See [Signer].
+     */
+    val foreign: Boolean = false,
 ) {
     /** What to show on the left of the arrow. Never a versionCode if a name exists. */
     val installedLabel: String
         get() = Version.installedLabel(installedByMarket, installedVersionName, installedVersionCode)
 
     val updatable: Boolean
-        get() = Version.updateAvailable(
+        // Nothing we publish can replace a package signed by a different key: Android identifies an
+        // app by (packageName, certificate) and refuses the install outright. Offering the update
+        // anyway spends the user's data on a download that ends in a failure with no explanation,
+        // and it is what BrightMarket did to everyone running one of the other forks of
+        // app.lightphonekeyboard.
+        get() = !foreign && Version.updateAvailable(
             installedVersionName = installedVersionName,
             installedVersionCode = installedVersionCode,
             installedByMarket = installedByMarket,
@@ -225,6 +245,8 @@ object Index {
         versionNameOf: (String) -> String? = { null },
         /** What BrightMarket recorded installing for a package. */
         marketVersionOf: (String) -> String? = { null },
+        /** The certificate the installed copy is signed with, when it can be read. */
+        signerOf: (String) -> String? = { null },
     ): Triple<List<Installed>, List<Installed>, List<App>> {
         val present = apps.mapNotNull { app ->
             installed[app.pkg]?.let {
@@ -235,6 +257,7 @@ object Index {
                     target = app.target(nightlyFor(app.pkg)),
                     installedVersionName = versionNameOf(app.pkg),
                     installedByMarket = marketVersionOf(app.pkg),
+                    foreign = Signer.foreign(app.signer, signerOf(app.pkg)),
                 )
             }
         }
@@ -287,6 +310,7 @@ object Index {
                 downloads = o.optInt("downloads", 0),
                 users = o.optInt("users", 0),
                 firstSeen = o.optString("firstSeen", ""),
+                signer = o.optString("signer", ""),
                 screenshots = o.optJSONArray("screenshots")?.let { arr ->
                     (0 until arr.length()).mapNotNull { j ->
                         arr.optJSONObject(j)?.optString("url")?.takeIf { it.isNotBlank() }

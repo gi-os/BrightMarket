@@ -921,7 +921,11 @@ private fun UpdateRow(entry: Installed, progress: Installer.Progress?, onClick: 
                     "${entry.installedLabel} → ${Version.display(entry.target.version)} · nightly"
                 entry.updatable ->
                     "${entry.installedLabel} → ${Version.display(entry.target.version)}"
-                entry.target.nightly -> "v${entry.target.version} · nightly"
+                // The copy on the phone is signed by somebody else, so nothing here can replace it
+                // and no update will be offered. Saying so beats a row that silently never moves:
+                // the same applicationId is shipped by more than one project, and the fix is to
+                // uninstall whichever one you don't want.
+                entry.foreign -> "${entry.installedLabel} · another build, signed elsewhere"
                 else -> "v${entry.target.version}"
             },
             style = MaterialTheme.typography.bodySmall,
