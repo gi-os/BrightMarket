@@ -4,6 +4,26 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.32
+
+**BrightMarket tells you when BrightMarket has an update.**
+
+When a new BrightMarket is out, a white bar shows at the top of Browse (or Updates in Focus mode).
+Tap it to install. BrightMarket closes while it updates, the same as before. Until now the update
+showed only as a row in the Updates tab, and about a third of phones stayed on an older version.
+
+**Pre-releases for apps that aren't in BrightMarket.**
+
+Each GitHub repo you added yourself now has a **PRE-RELEASES** switch on its row in Updates. It is
+off by default. Turn it on and that one app gets the newest release on GitHub, pre-release or not.
+The row says "pre-release" when that is what it found. Other apps don't change. Apps in the
+catalogue keep their own NIGHTLY switch on their page.
+
+If you import from Obtainium, each app keeps its "include prereleases" setting.
+
+If GitHub's API limit is used up, BrightMarket falls back to the newest stable release until the
+limit resets.
+
 ## v1.31
 
 **Sort by users, and see how many people have an app rather than how many times it was downloaded.**
