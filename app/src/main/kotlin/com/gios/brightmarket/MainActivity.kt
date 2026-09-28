@@ -374,6 +374,15 @@ class MainActivity : ComponentActivity() {
                         refreshing = loading,
                     )
 
+                    // BrightMarket's own update, on the first tab. Settings and the
+                    // Updates tab (which already lists it) are left alone, except in
+                    // Focus mode, where Updates *is* the first tab.
+                    val selfUpdate = updates.firstOrNull { it.isSelf }
+                    val firstTab = tabs[index] == "Browse" || (focusMode && tabs[index] == "Updates")
+                    if (selfUpdate != null && firstTab) {
+                        SelfUpdateBar(selfUpdate, progress) { install(selfUpdate.app) }
+                    }
+
                     Column(Modifier.weight(1f)) {
                         when (tabs[index]) {
                         "Browse" -> BrowseScreen(
@@ -413,6 +422,7 @@ class MainActivity : ComponentActivity() {
                                 refreshingRepo = row.repo
                                 refreshTracked(only = row.repo, force = true)
                             },
+                            onTogglePrerelease = ::togglePrerelease,
                             refreshingRepo = refreshingRepo,
                             onRemoveFollowed = { app ->
                                 Followed.remove(this@MainActivity, app.pkg)
@@ -654,6 +664,22 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun togglePrerelease(row: TrackedRow) {
+        val next = !row.prereleaseOn
+        Tracked.setPrerelease(this, row.repo, next)
+        // Flipped on screen straight away; the re-check fills in which build
+        // that now means.
+        trackedRows = trackedRows.map {
+            if (it.repo.equals(row.repo, true)) it.copy(prereleaseOn = next) else it
+        }
+        refreshingRepo = row.repo
+        refreshTracked(only = row.repo, force = true)
+        toast(
+            if (next) "${row.name} takes pre-releases"
+            else "${row.name} takes official releases only"
+        )
+    }
+
     private fun forgetTracked(row: TrackedRow) {
         Tracked.remove(this, row.repo)
         refreshTracked()
@@ -694,6 +720,8 @@ class MainActivity : ComponentActivity() {
                         installedByMarket = pkg?.let {
                             InstalledVersions.get(this@MainActivity, it)
                         },
+                        prereleaseOn = e.prerelease,
+                        isPrerelease = resolved?.prerelease == true,
                         status = when (outcome) {
                             is Tracked.Outcome.Ok -> null
                             is Tracked.Outcome.NoRelease -> "no APK in its releases"

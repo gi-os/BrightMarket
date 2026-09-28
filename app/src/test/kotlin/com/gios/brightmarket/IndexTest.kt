@@ -315,6 +315,21 @@ class IndexTest {
         assertEquals(1, result.unmatched.size - trackable.size)
     }
 
+    @Test fun `an Obtainium import keeps its include-prereleases choice`() {
+        // additionalSettings is a JSON string inside the JSON in real exports.
+        val export = """
+        {"apps":[{"id":"a.pre","url":"https://github.com/o/pre","additionalSettings":"{\"includePrereleases\":true}"},
+                 {"id":"a.off","url":"https://github.com/o/off","additionalSettings":"{\"includePrereleases\":false}"},
+                 {"id":"a.none","url":"https://github.com/o/none"},
+                 {"id":"a.bad","url":"https://github.com/o/bad","additionalSettings":"not json"}]}
+        """.trimIndent()
+        val tracked = Obtainium.trackable(Obtainium.parse(export))
+        assertEquals(
+            mapOf("o/pre" to true, "o/off" to false, "o/none" to false, "o/bad" to false),
+            tracked.associate { it.repo to it.prerelease },
+        )
+    }
+
     @Test fun `importing twice does not duplicate a tracked repo`() {
         // GitHub treats owner/name case-insensitively, so the same repo in two
         // exports must not become two rows that update each other in a loop.

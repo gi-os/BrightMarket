@@ -683,6 +683,7 @@ fun UpdatesScreen(
     onInstallTracked: (TrackedRow) -> Unit,
     onForgetTracked: (TrackedRow) -> Unit,
     onRefreshTracked: (TrackedRow) -> Unit = {},
+    onTogglePrerelease: (TrackedRow) -> Unit = {},
     refreshingRepo: String? = null,
     onRemoveFollowed: (App) -> Unit,
 ) {
@@ -778,6 +779,7 @@ fun UpdatesScreen(
                     onInstallTracked,
                     onForgetTracked,
                     onRefreshTracked,
+                    onTogglePrerelease,
                     refreshing = refreshingRepo.equals(row.repo, ignoreCase = true),
                 )
             }
@@ -800,6 +802,10 @@ data class TrackedRow(
     val installedVersionName: String? = null,
     /** The release string BrightMarket recorded installing, if it installed it. */
     val installedByMarket: String? = null,
+    /** Whether this repo is set to take pre-releases. */
+    val prereleaseOn: Boolean = false,
+    /** Whether the release found is itself a pre-release. */
+    val isPrerelease: Boolean = false,
 ) {
     val updatable: Boolean
         get() = installedVersionCode != null && Version.updateAvailable(
@@ -821,8 +827,11 @@ private fun TrackedRowView(
     onInstall: (TrackedRow) -> Unit,
     onForget: (TrackedRow) -> Unit,
     onRefresh: (TrackedRow) -> Unit,
+    onTogglePrerelease: (TrackedRow) -> Unit,
     refreshing: Boolean,
 ) {
+    // Named on the row so a pre-release is never offered as if it were stable.
+    val pre = if (row.isPrerelease) " · pre-release" else ""
     Column(
         Modifier
             .fillMaxWidth()
@@ -848,9 +857,9 @@ private fun TrackedRowView(
                 row.status != null -> "${row.repo} · ${row.status}"
                 row.updatable ->
                     "${row.repo} · ${Version.installedLabel(row.installedByMarket, row.installedVersionName, row.installedVersionCode ?: 0L)}" +
-                        " → ${Version.display(row.version)}"
-                row.installedVersionCode != null -> "${row.repo} · ${row.version}"
-                else -> "${row.repo} · ${row.version} · not installed"
+                        " → ${Version.display(row.version)}$pre"
+                row.installedVersionCode != null -> "${row.repo} · ${row.version}$pre"
+                else -> "${row.repo} · ${row.version}$pre · not installed"
             },
             style = MaterialTheme.typography.bodySmall,
             color = Light.ContentSecondary,
@@ -872,6 +881,21 @@ private fun TrackedRowView(
                 },
             )
             Spacer(Modifier.width(gridUnits(1f)))
+            Spacer(Modifier.width(gridUnits(1f)))
+            // The channel, on the row it is about -- the same per-app rule as
+            // the NIGHTLY switch on an indexed app's page. Bright when on, so a
+            // repo taking pre-releases can be spotted down the list.
+            Text(
+                if (row.prereleaseOn) "PRE-RELEASES: ON" else "PRE-RELEASES: OFF",
+                style = MaterialTheme.typography.labelSmall,
+                color = if (row.prereleaseOn) Light.Content else Light.ContentSecondary,
+                modifier = if (refreshing) {
+                    Modifier
+                } else {
+                    Modifier.lightClickable { onTogglePrerelease(row) }
+                },
+            )
+            Spacer(Modifier.width(gridUnits(1f)))
             Text(
                 "FORGET",
                 style = MaterialTheme.typography.labelSmall,
@@ -879,6 +903,60 @@ private fun TrackedRowView(
                 modifier = Modifier.lightClickable { onForget(row) },
             )
         }
+    }
+}
+
+/**
+ * BrightMarket's own update, on the page people land on.
+ *
+ * It used to be only a row in the Updates tab, and 42 of the 138 phones
+ * counted on 2026-09-28 (30%) were still on an older BrightMarket. The app
+ * that updates everything else was the one app people did not update.
+ *
+ * Inverted, white on black, because this is the one row that changes what
+ * every other row can do. It paints its own background: a bar that relies on
+ * its parent's shows whatever is behind it.
+ */
+@Composable
+fun SelfUpdateBar(entry: Installed, progress: Installer.Progress?, onUpdate: () -> Unit) {
+    val busy = progress != null && progress !is Installer.Progress.Failed
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(Light.Content)
+            .lightClickable(enabled = !busy, onClick = onUpdate)
+            .padding(horizontal = gridUnits(Grid.INSET), vertical = gridUnits(0.7f)),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                "BRIGHTMARKET UPDATE",
+                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.14f.em),
+                color = Light.Background,
+            )
+            Text(
+                when {
+                    progress is Installer.Progress.Downloading && progress.total > 0 ->
+                        "Downloading ${progress.bytes * 100 / progress.total}%"
+                    progress is Installer.Progress.Downloading -> "Downloading…"
+                    progress is Installer.Progress.Verifying -> "Verifying…"
+                    progress is Installer.Progress.AwaitingConfirmation -> "Confirm the install…"
+                    progress is Installer.Progress.Failed -> progress.reason
+                    else -> "${entry.installedLabel} → ${Version.display(entry.target.version)}" +
+                        (if (entry.target.nightly) " · nightly" else "") + " · closes Market"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = Light.Background,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(Modifier.width(gridUnits(0.8f)))
+        Text(
+            if (busy) "…" else "UPDATE",
+            style = MaterialTheme.typography.labelLarge,
+            color = Light.Background,
+        )
     }
 }
 

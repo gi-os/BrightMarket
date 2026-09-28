@@ -31,6 +31,11 @@ object Tracked {
         /** applicationId, once known. Null until the first release is read. */
         val pkg: String? = null,
         val name: String = repo.substringAfter('/'),
+        /**
+         * Take GitHub pre-releases for this repo too. Off unless somebody
+         * turned it on for this one repo, the same per-app rule as [Nightly].
+         */
+        val prerelease: Boolean = false,
     )
 
     /** A resolved release for a tracked repo, shaped like the index's [App]. */
@@ -42,6 +47,8 @@ object Tracked {
         val size: Long,
         val publishedAt: String,
         val notes: String,
+        /** True when the release picked is marked pre-release on GitHub. */
+        val prerelease: Boolean = false,
     )
 
     fun all(ctx: Context): List<Entry> {
@@ -55,6 +62,7 @@ object Tracked {
                     pkg = o.optString("pkg").takeIf { it.isNotBlank() },
                     name = o.optString("name").takeIf { it.isNotBlank() }
                         ?: o.getString("repo").substringAfter('/'),
+                    prerelease = o.optBoolean("pre", false),
                 )
             }
         }.getOrDefault(emptyList())
@@ -71,6 +79,7 @@ object Tracked {
                     put("repo", e.repo)
                     e.pkg?.let { put("pkg", it) }
                     put("name", e.name)
+                    if (e.prerelease) put("pre", true)
                 }
             )
         }
@@ -80,6 +89,18 @@ object Tracked {
     /** Record what an installed APK turned out to be, so updates can be compared. */
     fun setPkg(ctx: Context, repo: String, pkg: String) {
         save(ctx, all(ctx).map { if (it.repo.equals(repo, true)) it.copy(pkg = pkg) else it })
+    }
+
+    /**
+     * Turn pre-releases on or off for one repo.
+     *
+     * The cached answer is dropped with it. That answer was picked under the
+     * old setting, and its ETag would get a 304 for the same release list, so
+     * without this the switch would do nothing until the cache aged out.
+     */
+    fun setPrerelease(ctx: Context, repo: String, on: Boolean) {
+        save(ctx, all(ctx).map { if (it.repo.equals(repo, true)) it.copy(prerelease = on) else it })
+        ctx.getSharedPreferences(CACHE, Context.MODE_PRIVATE).edit().remove(repo).apply()
     }
 
     fun add(ctx: Context, entry: Entry): Boolean {
@@ -244,7 +265,9 @@ object Tracked {
         token: String? = null,
         force: Boolean = false,
     ): Outcome {
-        val cached = cacheFor(ctx, entry.repo)
+        // An answer picked under the other pre-release setting is not an
+        // answer to this question.
+        val cached = cacheFor(ctx, entry.repo)?.takeIf { it.prerelease == entry.prerelease }
         // Nothing changes minute to minute, and every request spends a sixtieth
         // of the hourly allowance. A repo checked recently is not checked again.
         if (!force && cached != null &&
@@ -284,7 +307,7 @@ object Tracked {
                 val (resolved, fallbackNote) = withoutApi(entry)
                 if (resolved != null) {
                     val ok = Outcome.Ok(resolved)
-                    store(ctx, entry.repo, Cached(null, System.currentTimeMillis(), ok))
+                    store(ctx, entry.repo, Cached(null, System.currentTimeMillis(), ok, entry.prerelease))
                     return ok
                 }
 
@@ -305,7 +328,7 @@ object Tracked {
                 val (resolved, fallbackNote) = withoutApi(entry)
                 if (resolved != null) {
                     val ok = Outcome.Ok(resolved)
-                    store(ctx, entry.repo, Cached(null, System.currentTimeMillis(), ok))
+                    store(ctx, entry.repo, Cached(null, System.currentTimeMillis(), ok, entry.prerelease))
                     return ok
                 }
                 return cached?.outcome
@@ -314,7 +337,12 @@ object Tracked {
             val arr = JSONArray(conn.inputStream.bufferedReader().readText())
             for (i in 0 until arr.length()) {
                 val rel = arr.getJSONObject(i)
-                if (rel.optBoolean("draft") || rel.optBoolean("prerelease")) continue
+                if (rel.optBoolean("draft")) continue
+                // GitHub lists newest first, so with pre-releases on, the first
+                // release with an APK is the newest build of either kind. It is
+                // never older than the newest stable one.
+                val pre = rel.optBoolean("prerelease")
+                if (pre && !entry.prerelease) continue
                 val assets = rel.optJSONArray("assets") ?: continue
                 val apk = pickApk((0 until assets.length()).map { assets.getJSONObject(it) })
                     ?: continue
@@ -329,14 +357,15 @@ object Tracked {
                         size = apk.optLong("size"),
                         publishedAt = rel.optString("published_at"),
                         notes = rel.optString("body").take(4000),
+                        prerelease = pre,
                     )
                 )
-                store(ctx, entry.repo, Cached(conn.getHeaderField("ETag"), System.currentTimeMillis(), ok))
+                store(ctx, entry.repo, Cached(conn.getHeaderField("ETag"), System.currentTimeMillis(), ok, entry.prerelease))
                 return ok
             }
             // Reached GitHub, read the whole list, found no APK. The one case
             // where "no APK release found" is a true statement.
-            store(ctx, entry.repo, Cached(conn.getHeaderField("ETag"), System.currentTimeMillis(), Outcome.NoRelease))
+            store(ctx, entry.repo, Cached(conn.getHeaderField("ETag"), System.currentTimeMillis(), Outcome.NoRelease, entry.prerelease))
             Outcome.NoRelease
         } catch (e: Exception) {
             // Offline, DNS, timeout. Says nothing about the repo, so an older
@@ -366,6 +395,10 @@ object Tracked {
      *     was cheaper to find is not a trade worth making.
      *  2. `/releases/expanded_assets/<tag>` is the fragment the releases page
      *     lazy-loads, and it names the assets.
+     *
+     * With pre-releases on, this route still finds only the newest stable
+     * release. That is the safe direction: the web pages have no cheap way to
+     * tell the two apart, and a stable build is never the wrong thing to offer.
      *
      * Returns null rather than throwing: this is already the unhappy path, and
      * the caller has a real answer to fall back on.
@@ -439,7 +472,13 @@ object Tracked {
     private const val FRESH_FOR_MS = 30 * 60 * 1000L
     private const val CACHE = "tracked_cache"
 
-    private data class Cached(val etag: String?, val checkedAt: Long, val outcome: Outcome)
+    private data class Cached(
+        val etag: String?,
+        val checkedAt: Long,
+        val outcome: Outcome,
+        /** The pre-release setting this answer was picked under. */
+        val prerelease: Boolean = false,
+    )
 
     private fun cacheFor(ctx: Context, repo: String): Cached? {
         val raw = ctx.getSharedPreferences(CACHE, Context.MODE_PRIVATE).getString(repo, null)
@@ -456,12 +495,18 @@ object Tracked {
                         size = o.optLong("size"),
                         publishedAt = o.optString("publishedAt"),
                         notes = o.optString("notes"),
+                        prerelease = o.optBoolean("isPre", false),
                     )
                 )
                 "none" -> Outcome.NoRelease
                 else -> return null
             }
-            Cached(o.optString("etag").takeIf { it.isNotBlank() }, o.optLong("checkedAt"), outcome)
+            Cached(
+                o.optString("etag").takeIf { it.isNotBlank() },
+                o.optLong("checkedAt"),
+                outcome,
+                o.optBoolean("forPre", false),
+            )
         }.getOrNull()
     }
 
@@ -469,6 +514,7 @@ object Tracked {
         val o = JSONObject().apply {
             cached.etag?.let { put("etag", it) }
             put("checkedAt", cached.checkedAt)
+            put("forPre", cached.prerelease)
             when (val r = cached.outcome) {
                 is Outcome.Ok -> {
                     put("kind", "ok")
@@ -478,6 +524,7 @@ object Tracked {
                     put("size", r.resolved.size)
                     put("publishedAt", r.resolved.publishedAt)
                     put("notes", r.resolved.notes)
+                    put("isPre", r.resolved.prerelease)
                 }
                 // Only a definite answer is worth remembering. A throttle or a
                 // dropped connection is about us, not the repo.

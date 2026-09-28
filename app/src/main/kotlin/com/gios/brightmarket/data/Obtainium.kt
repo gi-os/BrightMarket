@@ -19,7 +19,7 @@ import org.json.JSONObject
  */
 object Obtainium {
 
-    data class Entry(val pkg: String?, val repo: String?)
+    data class Entry(val pkg: String?, val repo: String?, val prerelease: Boolean = false)
 
     data class ImportResult(
         /** In the Obtainium export and in BrightMarket's index -- trackable now. */
@@ -41,8 +41,24 @@ object Obtainium {
             val app = raw.optJSONObject("app") ?: raw
             val pkg = app.optString("id").takeIf { it.isNotBlank() }
             val url = app.optString("url").takeIf { it.isNotBlank() }
-            if (pkg == null && url == null) null else Entry(pkg, repoFromUrl(url))
+            if (pkg == null && url == null) null
+            else Entry(pkg, repoFromUrl(url), includesPrereleases(app))
         }
+    }
+
+    /**
+     * Obtainium's own "include prereleases" switch, carried across so an
+     * import keeps the channel the person had already chosen.
+     *
+     * `additionalSettings` is a JSON object written as a string inside the
+     * JSON, in every export seen so far; an inline object is read too. Anything
+     * unreadable means off, which is the safe default.
+     */
+    fun includesPrereleases(app: JSONObject): Boolean {
+        val extra = app.optJSONObject("additionalSettings")
+            ?: app.optString("additionalSettings").takeIf { it.isNotBlank() }
+                ?.let { runCatching { JSONObject(it) }.getOrNull() }
+        return extra?.optBoolean("includePrereleases", false) ?: false
     }
 
     /** "https://github.com/gi-os/BrightTip" -> "gi-os/BrightTip". */
@@ -63,7 +79,7 @@ object Obtainium {
      */
     fun trackable(unmatched: List<Entry>): List<Tracked.Entry> =
         unmatched.mapNotNull { e ->
-            e.repo?.let { Tracked.Entry(repo = it, pkg = e.pkg) }
+            e.repo?.let { Tracked.Entry(repo = it, pkg = e.pkg, prerelease = e.prerelease) }
         }
 
     fun match(entries: List<Entry>, index: List<App>): ImportResult {
