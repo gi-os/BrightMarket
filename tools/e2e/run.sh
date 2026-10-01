@@ -30,7 +30,9 @@ jobs() { adb shell dumpsys jobscheduler "$BM" 2>/dev/null; }
 adb shell settings put global verifier_verify_adb_installs 0 || true
 adb shell settings put global package_verifier_enable 0 || true
 
-(cd "$OUT" && python3 -m http.server 8000 >/dev/null 2>&1 &)
+python3 -m http.server 8000 --directory "$OUT" >/dev/null 2>&1 </dev/null &
+SERVER=$!
+trap 'kill $SERVER 2>/dev/null || true' EXIT
 sleep 1
 adb reverse tcp:8000 tcp:8000
 
@@ -40,9 +42,6 @@ adb install "$OUT/foreign-v1.apk"
 adb shell dumpsys package com.gios.e2e.owned | grep -q "installerPackageName=$BM" || fail "owned probe not installed as BrightMarket's"
 ok "probes installed (owned: installer of record is BrightMarket)"
 
-# Unplugged, so the periodic job (whose first run is immediate when its constraints
-# hold) cannot race the one-time run this test starts. Its constraints are checked
-# in the dump instead.
 adb shell dumpsys battery unplug
 adb logcat -c
 hook CONFIGURE --es index_url http://127.0.0.1:8000/index.json --ez auto true
@@ -54,6 +53,23 @@ for c in CHARGING NOT_METERED BATTERY_NOT_LOW; do
 done
 ok "periodic job scheduled: charging, unmetered network, battery not low"
 
+# Turning it on may start the periodic run at once; let that finish first.
+for i in $(seq 1 15); do logs | grep -q -E "done:|not allowed" && break; sleep 2; done
+
+# A fresh phone: BrightMarket has never been allowed to install apps. Nothing may
+# install, nothing may pop up, and the reason must be recorded for Settings.
+adb logcat -c
+hook RUN
+for i in $(seq 1 20); do logs | grep -q "not allowed to install apps" && break; sleep 2; done
+expect_log "not allowed to install apps"
+expect_vc com.gios.e2e.owned 1
+no_dialog
+hook STATE; sleep 2
+expect_log "isn't allowed to install apps yet"
+
+# What a real phone has after its first install through BrightMarket.
+adb shell appops set "$BM" REQUEST_INSTALL_PACKAGES allow
+adb logcat -c
 hook RUN
 # BrightMarket goes last and its install ends the process, so wait for its versionCode.
 for i in $(seq 1 90); do [ "$(vc $BM)" = "2" ] && break; sleep 2; done
@@ -99,3 +115,4 @@ ok "turning it off cancels the schedule"
 
 adb shell dumpsys battery reset
 echo "ALL $PASS CHECKS PASSED"
+touch "$OUT/PASSED"

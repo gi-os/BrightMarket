@@ -63,7 +63,11 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      # The emulator can hang on shutdown after the script has finished, so the step is
+      # allowed to time out and the verdict is the PASSED marker run.sh writes last.
       - name: Run on an Android 14 emulator
+        timeout-minutes: 15
+        continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
@@ -72,3 +76,6 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
           script: bash tools/e2e/run.sh
+
+      - name: Verdict
+        run: test -f e2e-out/PASSED

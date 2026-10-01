@@ -4,6 +4,23 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.33
+
+**Updates can install by themselves.**
+
+Turn on **Automatic updates** in Settings. It is off until you turn it on. When it is on,
+BrightMarket checks every few hours while the phone charges on Wi-Fi, and installs official
+releases without a tap. BrightMarket updates itself the same way, last.
+
+- A release must be at least a day old before it installs by itself.
+- An app you are using, or a call in progress, waits for the next check.
+- Apps on nightly builds stay manual.
+- Settings shows what the last check did.
+
+Android only lets BrightMarket do this for apps BrightMarket installed. An app you installed
+another way (adb, Obtainium, a browser) asks for one tap the first time, from the Updates tab.
+After that it updates by itself too. BrightMarket never shows an install prompt on its own.
+
 ## v1.32
 
 **BrightMarket tells you when BrightMarket has an update.**

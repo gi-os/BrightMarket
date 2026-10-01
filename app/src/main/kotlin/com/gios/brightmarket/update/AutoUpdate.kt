@@ -21,6 +21,7 @@ import com.gios.brightmarket.data.Signer
 import com.gios.brightmarket.install.Installer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Instant
@@ -63,6 +64,13 @@ object AutoUpdate {
 
     /** How old an official release must be before it installs by itself. */
     const val SOAK_MS = 24 * 60 * 60 * 1000L
+
+    /**
+     * One run at a time. Turning the setting on can start the periodic run straight away
+     * while another is in progress, and Android also throttles a second silent install of
+     * the same app within seconds into a request for the dialog.
+     */
+    private val running = Mutex()
 
     /** The message [Installer.install] fails with when Android wanted a tap. */
     const val NEEDS_TAP = "needs a tap"
@@ -158,8 +166,34 @@ object AutoUpdate {
         }
     }
 
-    suspend fun runOnce(ctx: Context): Summary = withContext(Dispatchers.IO) {
+    suspend fun runOnce(ctx: Context): Summary {
+        if (!running.tryLock()) {
+            Log.i(TAG, "already running")
+            return summary(ctx) ?: Summary(System.currentTimeMillis())
+        }
+        try {
+            return runLocked(ctx)
+        } finally {
+            running.unlock()
+        }
+    }
+
+    private suspend fun runLocked(ctx: Context): Summary = withContext(Dispatchers.IO) {
         val self = ctx.packageName
+        // Android's "install unknown apps" switch for BrightMarket. Until somebody has
+        // allowed it -- which happens the first time an install goes through here --
+        // every session asks for a tap, whoever owns the app (PackageInstallerSession
+        // checks isInstallDisabledForPackage before it looks at anything else).
+        if (!ctx.packageManager.canRequestPackageInstalls()) {
+            val s = Summary(
+                System.currentTimeMillis(),
+                error = "BrightMarket isn't allowed to install apps yet. Update one app by hand " +
+                    "and allow it when Android asks",
+            )
+            save(ctx, s)
+            Log.i(TAG, "not allowed to install apps")
+            return@withContext s
+        }
         val apps = try {
             Index.fetch(indexUrl(ctx))
         } catch (e: Exception) {
