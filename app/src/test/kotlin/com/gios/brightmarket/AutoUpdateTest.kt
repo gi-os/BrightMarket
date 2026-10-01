@@ -63,7 +63,7 @@ class AutoUpdateTest {
     @Test fun `BrightMarket updates itself whoever installed it, and goes last`() {
         val plan = AutoUpdate.plan(
             listOf(upd(app(self)), upd(app("a.one")), upd(app("a.two"))),
-            now, self, owner = { if (it == self) "com.android.shell" else self },
+            now, self, ownerOf = { if (it == self) "com.android.shell" else self },
         )
         assertEquals(listOf("a.one", "a.two", self), plan.map { it.update.app.pkg })
         assertEquals(listOf(true, true, true), plan.map { it.install })

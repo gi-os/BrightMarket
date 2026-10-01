@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # make-probe.sh <package> <versionCode> <targetSdk> <out.apk>
-# A code-free APK signed with the debug key, for the automatic-update emulator test.
+# A code-free APK signed with a throwaway key, for the automatic-update emulator test.
 set -euo pipefail
 PKG=$1; VC=$2; TARGET=$3; OUT=$4
 BT="$ANDROID_HOME/build-tools/35.0.0"
@@ -15,6 +15,10 @@ cat > "$W/AndroidManifest.xml" <<M
 M
 "$BT/aapt2" link -o "$W/u.apk" -I "$JAR" --manifest "$W/AndroidManifest.xml"
 "$BT/zipalign" -p -f 4 "$W/u.apk" "$W/a.apk"
-"$BT/apksigner" sign --ks "$HOME/.android/debug.keystore" --ks-pass pass:android \
-  --key-pass pass:android --ks-key-alias androiddebugkey --out "$OUT" "$W/a.apk"
+# One throwaway key for every probe, so version 2 can replace version 1.
+KS="${PROBE_KEYSTORE:-/tmp/e2e-probe.jks}"
+[ -f "$KS" ] || keytool -genkeypair -keystore "$KS" -storepass android -keypass android \
+  -alias probe -keyalg RSA -keysize 2048 -validity 3650 -dname "CN=e2e probe" >/dev/null 2>&1
+"$BT/apksigner" sign --ks "$KS" --ks-pass pass:android \
+  --key-pass pass:android --ks-key-alias probe --out "$OUT" "$W/a.apk"
 rm -rf "$W"
