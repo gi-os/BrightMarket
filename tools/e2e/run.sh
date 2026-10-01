@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # The automatic-update test, on an Android 14 emulator with no Google services (like the
 # Light Phone III). Drives the real AutoUpdateWorker through the debug-only DebugHooks.
-set -euo pipefail
+# No pipefail: `grep -q` closes the pipe on the first match, and pipefail turns the
+# writer's SIGPIPE into a failure (exit 141) whenever the input is long.
+set -eu
 OUT=e2e-out
 BM=com.gios.brightmarket
 HOOK="$BM/.DebugHooks"
