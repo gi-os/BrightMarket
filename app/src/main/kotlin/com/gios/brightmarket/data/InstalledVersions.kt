@@ -33,7 +33,11 @@ object InstalledVersions {
     /** About to hand this version to PackageInstaller. Not yet true. */
     fun markPending(ctx: Context, pkg: String, version: String) {
         if (pkg.isBlank() || version.isBlank()) return
-        prefs(ctx).edit().putString(PENDING + pkg, version).apply()
+        // commit, not apply: for BrightMarket's own update the process is killed as
+        // the session lands, and an apply() still in flight dies with it. The new
+        // process would then have no record of what it was updated to, and offer the
+        // same update again -- every six hours, once updates run by themselves.
+        prefs(ctx).edit().putString(PENDING + pkg, version).commit()
     }
 
     /**

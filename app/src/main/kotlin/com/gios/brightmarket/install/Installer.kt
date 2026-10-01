@@ -29,6 +29,15 @@ object Installer {
 
     const val ACTION_INSTALL_STATUS = "com.gios.brightmarket.INSTALL_STATUS"
 
+    /** On the status intent: the package this session installs, as we named it. */
+    const val EXTRA_TARGET = "com.gios.brightmarket.TARGET"
+
+    /**
+     * On the status intent: nobody is watching. A request for the confirmation dialog
+     * is then abandoned instead of shown. See [com.gios.brightmarket.update.AutoUpdate].
+     */
+    const val EXTRA_UNATTENDED = "com.gios.brightmarket.UNATTENDED"
+
     sealed interface Progress {
         data class Downloading(val bytes: Long, val total: Long) : Progress
         data object Verifying : Progress
@@ -120,6 +129,13 @@ object Installer {
          * the last dialog standing. See [InstallEvents].
          */
         awaitResult: Boolean = false,
+        /**
+         * Ask Android to skip the confirmation dialog, and never show one. Android only
+         * agrees for an update BrightMarket owns (or BrightMarket itself); anything else
+         * fails with [com.gios.brightmarket.update.AutoUpdate.NEEDS_TAP] and installs
+         * nothing.
+         */
+        unattended: Boolean = false,
     ): Result<Unit> = withContext(Dispatchers.IO) {
         // Named per install, not per package. `pkg` is empty for a tracked repo
         // whose applicationId isn't known yet, which made the file ".apk" --
@@ -184,7 +200,7 @@ object Installer {
             // finished.
             val waiter = if (awaitResult) InstallEvents.expect(target) else null
             try {
-                commitSession(ctx, apk, target)
+                commitSession(ctx, apk, target, unattended)
             } catch (e: Throwable) {
                 if (waiter != null) InstallEvents.cancel(target)
                 throw e
@@ -278,11 +294,25 @@ object Installer {
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
-    private fun commitSession(ctx: Context, apk: File, pkg: String) {
+    private fun commitSession(ctx: Context, apk: File, pkg: String, unattended: Boolean) {
         val installer = ctx.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(
             PackageInstaller.SessionParams.MODE_FULL_INSTALL
-        ).apply { setAppPackageName(pkg) }
+        ).apply {
+            setAppPackageName(pkg)
+            // Unattended asks for no dialog. Attended now says so explicitly, which is
+            // what it already meant: an installer holding REQUEST_INSTALL_PACKAGES with
+            // this unset is treated as USER_ACTION_REQUIRED.
+            // API 31; minSdk is 30. On 30 there is no silent path at all, and an
+            // unattended session there comes back as a request for the dialog, which
+            // the receiver abandons.
+            if (android.os.Build.VERSION.SDK_INT >= 31) {
+                setRequireUserAction(
+                    if (unattended) PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED
+                    else PackageInstaller.SessionParams.USER_ACTION_REQUIRED
+                )
+            }
+        }
 
         val sessionId = installer.createSession(params)
         installer.openSession(sessionId).use { session ->
@@ -291,6 +321,8 @@ object Installer {
                 session.fsync(out)
             }
             val intent = Intent(ACTION_INSTALL_STATUS).setPackage(ctx.packageName)
+                .putExtra(EXTRA_TARGET, pkg)
+                .putExtra(EXTRA_UNATTENDED, unattended)
             val pending = PendingIntent.getBroadcast(
                 ctx,
                 sessionId,

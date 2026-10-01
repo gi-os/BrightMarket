@@ -33,9 +33,13 @@ android {
         targetSdk = 35
         // CI overwrites both from the workflow run number; see .github/workflows/build.yml
         versionCode = 1
-        versionName = "1.32.0"
+        versionName = "1.33.0"
 
-        ndk { abiFilters += "arm64-v8a" }
+        ndk {
+            abiFilters += "arm64-v8a"
+            // The emulator test runs an x86_64 Android 14 image. Never set for a release.
+            if (project.hasProperty("e2eAbi")) abiFilters += "x86_64"
+        }
 
         // LightReport.install reads this at startup.
         buildConfigField("String", "REPORT_TOKEN", "\"$reportToken\"")

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Debug builds only. The emulator test in .github/workflows/autoupdate-e2e.yml drives
+    automatic updates through this receiver and serves its test catalogue over plain
+    HTTP on 127.0.0.1. None of it is in a release build.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:networkSecurityConfig="@xml/debug_network_security_config">
+        <receiver
+            android:name=".DebugHooks"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.gios.brightmarket.debug.CONFIGURE" />
+                <action android:name="com.gios.brightmarket.debug.RUN" />
+                <action android:name="com.gios.brightmarket.debug.STATE" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

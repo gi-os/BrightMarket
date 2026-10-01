@@ -62,6 +62,16 @@ object InstallEvents {
      * here: it is the system asking for its dialog, and treating it as an answer
      * is how a batch would race itself again.
      */
+    /**
+     * An unattended session that Android wanted a tap for. It has been abandoned, so for
+     * whoever is waiting it is as final as a failure.
+     */
+    fun publishNeedsTap(pkg: String, message: String) {
+        waiters.remove(pkg)?.complete(
+            Result(pkg, PackageInstaller.STATUS_PENDING_USER_ACTION, message)
+        )
+    }
+
     fun publish(pkg: String, status: Int, message: String) {
         if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) return
         waiters.remove(pkg)?.complete(Result(pkg, status, message))

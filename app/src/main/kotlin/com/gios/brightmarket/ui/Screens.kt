@@ -326,6 +326,11 @@ fun SettingsScreen(
     onToggleFocus: () -> Unit,
     onToggleNightly: () -> Unit,
     onTogglePulse: () -> Unit = {},
+    /** Whether updates install by themselves. */
+    autoUpdate: Boolean = false,
+    /** What the last automatic run did, in one line, or null before the first. */
+    autoUpdateLast: String? = null,
+    onToggleAutoUpdate: () -> Unit = {},
     onScan: () -> Unit,
     onImport: () -> Unit,
 ) {
@@ -425,6 +430,44 @@ fun SettingsScreen(
             style = MaterialTheme.typography.labelLarge,
             modifier = Modifier
                 .lightClickable(onClick = onToggleNightly)
+                .padding(vertical = gridUnits(0.4f)),
+        )
+
+        Spacer(Modifier.height(gridUnits(2f)))
+        Text("AUTOMATIC UPDATES", style = MaterialTheme.typography.titleMedium, color = Light.ContentSecondary)
+        Spacer(Modifier.height(gridUnits(0.4f)))
+        Text(
+            if (autoUpdate) {
+                "On. Official releases install by themselves while the phone charges " +
+                    "on Wi-Fi, once they are a day old, and never while the app is in use."
+            } else {
+                "Off. Updates wait for you in the Updates tab."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = Light.ContentSecondary,
+        )
+        if (autoUpdate) {
+            Spacer(Modifier.height(gridUnits(0.4f)))
+            // Android decides this, not BrightMarket: only an app BrightMarket installed
+            // can be updated without a tap. Saying so up front beats a setting that
+            // looks like it skipped half the phone.
+            Text(
+                "An app you installed some other way asks for one tap the first time. " +
+                    "After that it updates by itself too. Nightly builds stay manual.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Light.ContentSecondary,
+            )
+            if (autoUpdateLast != null) {
+                Spacer(Modifier.height(gridUnits(0.4f)))
+                Text(autoUpdateLast, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        Spacer(Modifier.height(gridUnits(0.6f)))
+        Text(
+            if (autoUpdate) "TURN OFF AUTOMATIC UPDATES" else "TURN ON AUTOMATIC UPDATES",
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier
+                .lightClickable(onClick = onToggleAutoUpdate)
                 .padding(vertical = gridUnits(0.4f)),
         )
 

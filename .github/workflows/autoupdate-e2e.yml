@@ -1,0 +1,74 @@
+name: Auto-update e2e
+
+# Automatic updates on a real Android 14 system, end to end, before they reach a phone.
+# Android 14 with no Google services is what the Light Phone III runs, so the image is
+# the plain AOSP one. Drives the real AutoUpdateWorker through the debug-only hooks in
+# app/src/debug against a test catalogue served from this runner. See tools/e2e/run.sh
+# for what is checked.
+on:
+  push:
+    branches-ignore: [main]
+    paths:
+      - 'app/src/**'
+      - 'tools/e2e/**'
+      - '.github/workflows/autoupdate-e2e.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+        with:
+          packages: ''
+      - uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+
+      - name: Build BrightMarket twice (versionCode 1 and 2)
+        env:
+          GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p e2e-out
+          ./gradlew :app:assembleDebug -Pe2eAbi --stacktrace
+          cp app/build/outputs/apk/debug/app-debug.apk e2e-out/bm-v1.apk
+          sed -i -E 's/versionCode = 1$/versionCode = 2/' app/build.gradle.kts
+          grep -q 'versionCode = 2' app/build.gradle.kts
+          ./gradlew :app:assembleDebug -Pe2eAbi --stacktrace
+          cp app/build/outputs/apk/debug/app-debug.apk e2e-out/bm-v2.apk
+
+      - name: Build probe apps and the test catalogue
+        run: |
+          for p in owned foreign held fresh; do
+            for v in 1 2; do bash tools/e2e/make-probe.sh com.gios.e2e.$p $v 34 e2e-out/$p-v$v.apk; done
+          done
+          # Targets API 29: Android 14 refuses to update it without a tap, so this one
+          # proves the abandoned-session path.
+          for v in 1 2; do bash tools/e2e/make-probe.sh com.gios.e2e.oldtarget $v 29 e2e-out/oldtarget-v$v.apk; done
+          python3 tools/e2e/gen-index.py e2e-out
+          ls -la e2e-out
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run on an Android 14 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: default
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          script: bash tools/e2e/run.sh

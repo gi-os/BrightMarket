@@ -5,6 +5,10 @@
     <!-- Without this the PackageInstaller session can't even reach the system's
          own confirmation dialog. It is not a silent-install permission. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Lets an update BrightMarket owns (and BrightMarket itself) skip the dialog,
+         for automatic updates. Normal permission, granted at install. Android still
+         decides per update: an app installed some other way still asks. -->
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
     <!--
         Required to launch the system uninstaller at all. Without it ACTION_DELETE
         is refused before any UI appears, which is why the uninstall action did
@@ -65,6 +69,16 @@
                 <data android:scheme="brightmarket" />
             </intent-filter>
         </activity>
+
+        <!-- Puts the automatic-update schedule back, and records a self-update,
+             after BrightMarket is replaced. A protected system broadcast. -->
+        <receiver
+            android:name=".update.SelfReplacedReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <receiver
             android:name=".install.InstallResultReceiver"

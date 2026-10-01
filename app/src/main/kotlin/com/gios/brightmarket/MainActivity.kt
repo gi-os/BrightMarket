@@ -34,6 +34,7 @@ import com.gios.brightmarket.data.Tracked
 import com.gios.brightmarket.data.Version
 import com.gios.brightmarket.data.target
 import com.gios.brightmarket.install.Installer
+import com.gios.brightmarket.update.AutoUpdate
 import com.gios.brightmarket.ui.*
 import com.gios.light.common.report.LightReport
 import com.gios.light.common.report.ReportOverlay
@@ -70,6 +71,10 @@ class MainActivity : ComponentActivity() {
 
     /** Whether this phone is counted in the catalogue's install figures. */
     private var pulse by mutableStateOf(true)
+
+    /** Whether updates install by themselves. See [AutoUpdate]. */
+    private var autoUpdate by mutableStateOf(false)
+    private var autoUpdateLast by mutableStateOf<String?>(null)
 
     /**
      * Explicit per-app channel choices, held in state so the pages recompose.
@@ -224,6 +229,10 @@ class MainActivity : ComponentActivity() {
         focusMode = Focus.enabled(this)
         nightly = Focus.nightly(this)
         pulse = Pulse.enabled(this)
+        autoUpdate = AutoUpdate.enabled(this)
+        autoUpdateLast = AutoUpdate.summary(this)?.line()
+        // Puts the schedule back if anything dropped it. Cheap: the work is unique.
+        AutoUpdate.sync(this)
         nightlyChoices = Nightly.all(this)
         handleLink(intent)
 
@@ -443,6 +452,17 @@ class MainActivity : ComponentActivity() {
                                 toast(
                                     if (next) "Counting installs again"
                                     else "This phone is no longer counted"
+                                )
+                            },
+                            autoUpdate = autoUpdate,
+                            autoUpdateLast = autoUpdateLast,
+                            onToggleAutoUpdate = {
+                                val next = !autoUpdate
+                                AutoUpdate.setEnabled(this@MainActivity, next)
+                                autoUpdate = next
+                                toast(
+                                    if (next) "Updates will install by themselves"
+                                    else "Updates will wait for you"
                                 )
                             },
                             onToggleNightly = {

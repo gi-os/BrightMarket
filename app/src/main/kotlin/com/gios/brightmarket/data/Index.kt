@@ -99,6 +99,11 @@ data class App(
      * the channel off can put you back on it.
      */
     val preview: Preview? = null,
+    /**
+     * Set in the catalogue to stop a rollout: automatic updates leave this app alone.
+     * Installing it by hand still works. See [com.gios.brightmarket.update.AutoUpdate].
+     */
+    val hold: Boolean = false,
 )
 
 /** A prerelease build, checked exactly as hard as a stable one. */
@@ -311,6 +316,7 @@ object Index {
                 users = o.optInt("users", 0),
                 firstSeen = o.optString("firstSeen", ""),
                 signer = o.optString("signer", ""),
+                hold = o.optBoolean("hold", false),
                 screenshots = o.optJSONArray("screenshots")?.let { arr ->
                     (0 until arr.length()).mapNotNull { j ->
                         arr.optJSONObject(j)?.optString("url")?.takeIf { it.isNotBlank() }
