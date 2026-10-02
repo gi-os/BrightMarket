@@ -33,6 +33,8 @@ class DebugHooks : BroadcastReceiver() {
         when (intent.action) {
             "com.gios.brightmarket.debug.CONFIGURE" -> {
                 intent.getStringExtra("index_url")?.let { AutoUpdate.setIndexOverride(ctx, it) }
+                // Before "auto": setting the switch counts as answering the question.
+                if (intent.getBooleanExtra("prompt_reset", false)) AutoUpdate.resetAsked(ctx)
                 if (intent.hasExtra("auto")) AutoUpdate.setEnabled(ctx, intent.getBooleanExtra("auto", false))
                 if (intent.hasExtra("pulse")) Pulse.setEnabled(ctx, intent.getBooleanExtra("pulse", true))
                 if (intent.getBooleanExtra("onboard", false)) Focus.choose(ctx, false)

@@ -167,6 +167,43 @@ hook CONFIGURE --ez auto false
 sleep 4
 expect_periodic "CANCELLED|NONE" "turning it off cancels the schedule"
 
+# The one-time question, both answers, from a cold start.
+launch() { adb shell am start -S -W -n "$BM/.MainActivity" >/dev/null; sleep 7; }
+hook CONFIGURE --ez auto false
+hook CONFIGURE --ez prompt_reset true
+launch
+on_screen "Turn on automatic updates?" || fail "no first-launch question"
+adb exec-out screencap -p > "$OUT/prompt.png" || true
+ok "first launch asks to turn on automatic updates"
+tap_text "NOT NOW"
+sleep 3
+on_screen "Turn on automatic updates?" && fail "NOT NOW didn't close the question"
+expect_periodic "CANCELLED|NONE" "NOT NOW leaves automatic updates off"
+launch
+on_screen "Turn on automatic updates?" && fail "asked again after NOT NOW"
+ok "not asked again after NOT NOW"
+
+hook CONFIGURE --ez prompt_reset true
+launch
+on_screen "Turn on automatic updates?" || fail "no question after reset"
+tap_text "TURN ON"
+sleep 3
+on_screen "Turn on automatic updates?" && fail "TURN ON didn't close the question"
+expect_periodic "ENQUEUED|RUNNING" "TURN ON schedules automatic updates"
+launch
+on_screen "Turn on automatic updates?" && fail "asked again after TURN ON"
+ok "not asked again after TURN ON"
+tap_text "@lasttab"; sleep 3
+seek "TURN OFF AUTOMATIC UPDATES" || fail "Settings doesn't show it on"
+ok "Settings agrees it is on"
+
+# Someone who set it in Settings is never asked.
+hook CONFIGURE --ez prompt_reset true --ez auto false
+launch
+on_screen "Turn on automatic updates?" && fail "asked although Settings already chose"
+ok "a choice made in Settings counts as the answer"
+adb shell input keyevent KEYCODE_HOME
+
 adb shell dumpsys battery reset
 echo "ALL $PASS CHECKS PASSED"
 touch "$OUT/PASSED"

@@ -4,6 +4,14 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.34
+
+**BrightMarket asks once whether you want automatic updates.**
+
+The next time you open BrightMarket, a screen asks whether to turn on automatic updates. Choose
+**Turn on** or **Not now**. It asks only once. If you already set the switch in Settings, it
+doesn't ask at all. You can change your answer in Settings at any time.
+
 ## v1.33
 
 **Updates can install by themselves.**

@@ -75,6 +75,8 @@ class MainActivity : ComponentActivity() {
     /** Whether updates install by themselves. See [AutoUpdate]. */
     private var autoUpdate by mutableStateOf(false)
     private var autoUpdateLast by mutableStateOf<String?>(null)
+    /** The one-time "turn on automatic updates?" screen, until it is answered. */
+    private var askAutoUpdate by mutableStateOf(false)
 
     /**
      * Explicit per-app channel choices, held in state so the pages recompose.
@@ -230,6 +232,7 @@ class MainActivity : ComponentActivity() {
         nightly = Focus.nightly(this)
         pulse = Pulse.enabled(this)
         autoUpdate = AutoUpdate.enabled(this)
+        askAutoUpdate = !autoUpdate && !AutoUpdate.asked(this)
         autoUpdateLast = AutoUpdate.summary(this)?.line()
         // Puts the schedule back if anything dropped it. Cheap: the work is unique.
         AutoUpdate.sync(this)
@@ -244,6 +247,15 @@ class MainActivity : ComponentActivity() {
                         Focus.choose(this, focus)
                         focusMode = focus
                         onboarded = true
+                    }
+                    return@BrightMarketTheme
+                }
+                if (askAutoUpdate) {
+                    AutoUpdatePromptScreen { on ->
+                        if (on) AutoUpdate.setEnabled(this, true) else AutoUpdate.markAsked(this)
+                        autoUpdate = on
+                        askAutoUpdate = false
+                        if (on) toast("Updates will install by themselves")
                     }
                     return@BrightMarketTheme
                 }
