@@ -60,12 +60,20 @@ class DebugHooks : BroadcastReceiver() {
                 }
             }
             "com.gios.brightmarket.debug.STATE" -> {
-                Log.i(
-                    AutoUpdate.TAG,
-                    "state auto=${AutoUpdate.enabled(ctx)} " +
-                        "recorded=${InstalledVersions.get(ctx, ctx.packageName)} " +
-                        "summary=${AutoUpdate.summary(ctx)?.line()}",
-                )
+                val done = goAsync()
+                CoroutineScope(Dispatchers.IO).launch {
+                    val periodic = runCatching {
+                        WorkManager.getInstance(ctx).getWorkInfosForUniqueWork("auto-update").get()
+                            .lastOrNull()?.state?.name ?: "NONE"
+                    }.getOrElse { "ERROR" }
+                    Log.i(
+                        AutoUpdate.TAG,
+                        "state auto=${AutoUpdate.enabled(ctx)} periodic=$periodic " +
+                            "recorded=${InstalledVersions.get(ctx, ctx.packageName)} " +
+                            "summary=${AutoUpdate.summary(ctx)?.line()}",
+                    )
+                    done.finish()
+                }
             }
         }
     }

@@ -30,6 +30,13 @@ no_dialog() {
   ok "no install dialog on screen"
 }
 jobs() { adb shell dumpsys jobscheduler "$BM" 2>/dev/null; }
+# WorkManager's own answer for the periodic work: ENQUEUED, RUNNING, CANCELLED or NONE.
+periodic() { hook STATE; sleep 2; logs | grep -o 'periodic=[A-Z]*' | tail -1 | cut -d= -f2; }
+expect_periodic() {  # expect_periodic "ENQUEUED|RUNNING" "what"
+  local st=""
+  for i in 1 2 3 4 5; do st=$(periodic); echo "$st" | grep -q -E "^($1)$" && { ok "$2 ($st)"; return 0; }; sleep 2; done
+  fail "$2: periodic work is $st"
+}
 ui() { adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb shell cat /sdcard/ui.xml; }
 on_screen() { ui | python3 tools/e2e/find.py "$1" >/dev/null; }
 # Scroll down until TEXT is on screen (Settings runs past the fold).
@@ -104,8 +111,7 @@ no_dialog
 expect_log "self: committing 1.33.0-e2e"
 expect_vc $BM 2
 expect_log "self: now 1.33.0-e2e"
-jobs | grep -q CHARGING || fail "schedule gone after BrightMarket replaced itself"
-ok "schedule survives the self-update"
+expect_periodic "ENQUEUED|RUNNING" "schedule survives the self-update"
 
 adb logcat -c
 hook STATE
@@ -138,12 +144,10 @@ seek "TURN OFF AUTOMATIC UPDATES" || fail "no off switch"
 tap_text "TURN OFF AUTOMATIC UPDATES"
 sleep 3
 on_screen "TURN ON AUTOMATIC UPDATES" || fail "the switch didn't turn off"
-jobs | grep -q CHARGING && fail "turning it off left the periodic job scheduled"
-ok "turning it off in Settings cancels the schedule"
+expect_periodic "CANCELLED|NONE" "turning it off in Settings cancels the schedule"
 tap_text "TURN ON AUTOMATIC UPDATES"
 sleep 3
-jobs | grep -q CHARGING || fail "turning it on in Settings didn't schedule it"
-ok "turning it on in Settings schedules it"
+expect_periodic "ENQUEUED|RUNNING" "turning it on in Settings schedules it"
 
 # A tap-to-update by hand must still show Android's normal dialog. BrightMarket stays
 # on screen, as it is when somebody taps UPDATE: Android blocks a dialog launched from
@@ -159,8 +163,7 @@ expect_vc com.gios.e2e.foreign 1
 
 hook CONFIGURE --ez auto false
 sleep 4
-jobs | grep -q CHARGING && fail "turning it off left the periodic job scheduled"
-ok "turning it off cancels the schedule"
+expect_periodic "CANCELLED|NONE" "turning it off cancels the schedule"
 
 adb shell dumpsys battery reset
 echo "ALL $PASS CHECKS PASSED"
