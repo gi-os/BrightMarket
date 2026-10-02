@@ -131,9 +131,9 @@ tap_text "@lasttab"
 sleep 3
 seek "AUTOMATIC UPDATES" || fail "no AUTOMATIC UPDATES section in Settings"
 ok "Settings shows AUTOMATIC UPDATES"
-adb exec-out screencap -p > "$OUT/settings.png" || true
 seek "Last check*" || fail "Settings doesn't show the last check"
 ok "Settings shows the last check"
+adb exec-out screencap -p > "$OUT/settings.png" || true
 seek "TURN OFF AUTOMATIC UPDATES" || fail "no off switch"
 tap_text "TURN OFF AUTOMATIC UPDATES"
 sleep 3
