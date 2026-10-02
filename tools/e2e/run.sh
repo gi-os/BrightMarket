@@ -30,6 +30,8 @@ no_dialog() {
 jobs() { adb shell dumpsys jobscheduler "$BM" 2>/dev/null; }
 ui() { adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb shell cat /sdcard/ui.xml; }
 on_screen() { ui | python3 tools/e2e/find.py "$1" >/dev/null; }
+# Scroll down until TEXT is on screen (Settings runs past the fold).
+seek() { for i in 1 2 3 4 5; do on_screen "$1" && return 0; adb shell input swipe 540 1500 540 900 400; sleep 1; done; on_screen "$1"; }
 tap_text() { local xy; xy=$(ui | python3 tools/e2e/find.py "$1") || fail "no '$1' on screen"; adb shell input tap $xy; }
 
 adb shell settings put global verifier_verify_adb_installs 0 || true
@@ -120,11 +122,11 @@ adb shell am start -W -n "$BM/.MainActivity" >/dev/null
 sleep 8
 tap_text "@lasttab"
 sleep 3
-on_screen "AUTOMATIC UPDATES" || { adb shell input swipe 500 1600 500 600 300; sleep 2; }
-on_screen "AUTOMATIC UPDATES" || fail "no AUTOMATIC UPDATES section in Settings"
+seek "AUTOMATIC UPDATES" || fail "no AUTOMATIC UPDATES section in Settings"
 ok "Settings shows AUTOMATIC UPDATES"
-on_screen "Last check*" || fail "Settings doesn't show the last check"
+seek "Last check*" || fail "Settings doesn't show the last check"
 ok "Settings shows the last check"
+seek "TURN OFF AUTOMATIC UPDATES" || fail "no off switch"
 tap_text "TURN OFF AUTOMATIC UPDATES"
 sleep 3
 on_screen "TURN ON AUTOMATIC UPDATES" || fail "the switch didn't turn off"
