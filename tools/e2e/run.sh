@@ -33,7 +33,12 @@ jobs() { adb shell dumpsys jobscheduler "$BM" 2>/dev/null; }
 ui() { adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb shell cat /sdcard/ui.xml; }
 on_screen() { ui | python3 tools/e2e/find.py "$1" >/dev/null; }
 # Scroll down until TEXT is on screen (Settings runs past the fold).
-seek() { for i in 1 2 3 4 5; do on_screen "$1" && return 0; adb shell input swipe 540 1500 540 900 400; sleep 1; done; on_screen "$1"; }
+swipe_up() {
+  local wh w h
+  wh=$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -1); w=${wh%x*}; h=${wh#*x}
+  adb shell input swipe $((w/2)) $((h*65/100)) $((w/2)) $((h*30/100)) 400
+}
+seek() { for i in 1 2 3 4 5 6; do on_screen "$1" && return 0; swipe_up; sleep 1; done; on_screen "$1"; }
 tap_text() { local xy; xy=$(ui | python3 tools/e2e/find.py "$1") || fail "no '$1' on screen"; adb shell input tap $xy; }
 
 adb shell settings put global verifier_verify_adb_installs 0 || true
