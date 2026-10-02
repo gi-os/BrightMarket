@@ -13,6 +13,8 @@ vc() { adb shell dumpsys package "$1" | grep -m1 -o 'versionCode=[0-9]*' | cut -
 logs() { adb logcat -d -s BMAuto:* ; }
 fail() {
   echo "FAIL: $*"
+  adb exec-out screencap -p > "$OUT/fail.png" 2>/dev/null || true
+  adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb shell cat /sdcard/ui.xml > "$OUT/fail.xml" 2>/dev/null || true
   echo "--- BMAuto"; logs | tail -60
   echo "--- PackageInstaller"; adb logcat -d | grep -i -E 'PackageInstaller|InstallerSession' | tail -40
   exit 1
@@ -124,6 +126,7 @@ tap_text "@lasttab"
 sleep 3
 seek "AUTOMATIC UPDATES" || fail "no AUTOMATIC UPDATES section in Settings"
 ok "Settings shows AUTOMATIC UPDATES"
+adb exec-out screencap -p > "$OUT/settings.png" || true
 seek "Last check*" || fail "Settings doesn't show the last check"
 ok "Settings shows the last check"
 seek "TURN OFF AUTOMATIC UPDATES" || fail "no off switch"

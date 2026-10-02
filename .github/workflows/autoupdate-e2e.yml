@@ -77,5 +77,15 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
           script: bash tools/e2e/run.sh
 
+      - name: Screens
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screens
+          path: |
+            e2e-out/*.png
+            e2e-out/*.xml
+          if-no-files-found: ignore
+
       - name: Verdict
         run: test -f e2e-out/PASSED
