@@ -13,6 +13,7 @@
                 <action android:name="com.gios.brightmarket.debug.CONFIGURE" />
                 <action android:name="com.gios.brightmarket.debug.RUN" />
                 <action android:name="com.gios.brightmarket.debug.STATE" />
+                <action android:name="com.gios.brightmarket.debug.INSTALL" />
             </intent-filter>
         </receiver>
     </application>

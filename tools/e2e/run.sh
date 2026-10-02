@@ -28,6 +28,9 @@ no_dialog() {
   ok "no install dialog on screen"
 }
 jobs() { adb shell dumpsys jobscheduler "$BM" 2>/dev/null; }
+ui() { adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb shell cat /sdcard/ui.xml; }
+on_screen() { ui | python3 tools/e2e/find.py "$1" >/dev/null; }
+tap_text() { local xy; xy=$(ui | python3 tools/e2e/find.py "$1") || fail "no '$1' on screen"; adb shell input tap $xy; }
 
 adb shell settings put global verifier_verify_adb_installs 0 || true
 adb shell settings put global package_verifier_enable 0 || true
@@ -109,6 +112,39 @@ expect_log "done: Last check: nothing installed"
 logs | grep -q "self: committing" && fail "BrightMarket reinstalled itself on the second run"
 ok "second run installs nothing"
 no_dialog
+
+# The setting, in the real app. Counting off first, so this emulator never reaches the
+# public install figures.
+hook CONFIGURE --ez pulse false --ez onboard true
+adb shell am start -W -n "$BM/.MainActivity" >/dev/null
+sleep 8
+tap_text "@lasttab"
+sleep 3
+on_screen "AUTOMATIC UPDATES" || { adb shell input swipe 500 1600 500 600 300; sleep 2; }
+on_screen "AUTOMATIC UPDATES" || fail "no AUTOMATIC UPDATES section in Settings"
+ok "Settings shows AUTOMATIC UPDATES"
+on_screen "Last check*" || fail "Settings doesn't show the last check"
+ok "Settings shows the last check"
+tap_text "TURN OFF AUTOMATIC UPDATES"
+sleep 3
+on_screen "TURN ON AUTOMATIC UPDATES" || fail "the switch didn't turn off"
+jobs | grep -q CHARGING && fail "turning it off left the periodic job scheduled"
+ok "turning it off in Settings cancels the schedule"
+tap_text "TURN ON AUTOMATIC UPDATES"
+sleep 3
+jobs | grep -q CHARGING || fail "turning it on in Settings didn't schedule it"
+ok "turning it on in Settings schedules it"
+adb shell input keyevent KEYCODE_HOME
+
+# A tap-to-update by hand must still show Android's normal dialog.
+SHA=$(sha256sum "$OUT/foreign-v2.apk" | cut -d' ' -f1)
+hook INSTALL --es url http://127.0.0.1:8000/foreign-v2.apk --es pkg com.gios.e2e.foreign --es sha "$SHA"
+for i in $(seq 1 15); do adb shell dumpsys activity activities | grep -q -i packageinstaller && break; sleep 2; done
+adb shell dumpsys activity activities | grep -q -i packageinstaller || fail "a manual install showed no dialog"
+ok "a manual install still shows Android's confirmation dialog"
+adb shell input keyevent KEYCODE_BACK
+sleep 2
+expect_vc com.gios.e2e.foreign 1
 
 hook CONFIGURE --ez auto false
 sleep 4
