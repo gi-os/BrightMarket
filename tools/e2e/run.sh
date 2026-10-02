@@ -144,9 +144,10 @@ tap_text "TURN ON AUTOMATIC UPDATES"
 sleep 3
 jobs | grep -q CHARGING || fail "turning it on in Settings didn't schedule it"
 ok "turning it on in Settings schedules it"
-adb shell input keyevent KEYCODE_HOME
 
-# A tap-to-update by hand must still show Android's normal dialog.
+# A tap-to-update by hand must still show Android's normal dialog. BrightMarket stays
+# on screen, as it is when somebody taps UPDATE: Android blocks a dialog launched from
+# the background.
 SHA=$(sha256sum "$OUT/foreign-v2.apk" | cut -d' ' -f1)
 hook INSTALL --es url http://127.0.0.1:8000/foreign-v2.apk --es pkg com.gios.e2e.foreign --es sha "$SHA"
 for i in $(seq 1 15); do adb shell dumpsys activity activities | grep -q -i packageinstaller && break; sleep 2; done
