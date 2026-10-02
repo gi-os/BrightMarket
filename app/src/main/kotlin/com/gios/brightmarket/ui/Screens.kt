@@ -295,6 +295,53 @@ fun OnboardingScreen(onChoose: (focus: Boolean) -> Unit) {
     }
 }
 
+/**
+ * Asked once, on the first launch after onboarding -- and on the first launch of v1.34 for
+ * everyone who already had BrightMarket, which is most of the people this is for. Either
+ * answer is final; the switch in Settings is where it changes after that.
+ */
+@Composable
+fun AutoUpdatePromptScreen(onChoose: (on: Boolean) -> Unit) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Light.Background)
+            .verticalScroll(rememberScrollState()),
+    ) {
+        TopBar("BRIGHTMARKET")
+        Column(Modifier.padding(horizontal = gridUnits(Grid.INSET))) {
+            Text("Turn on automatic updates?", style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(gridUnits(0.6f)))
+            Text(
+                "Official releases install by themselves while the phone charges on Wi-Fi, " +
+                    "once they are a day old, and never while the app is in use.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Light.ContentSecondary,
+            )
+            Spacer(Modifier.height(gridUnits(1.5f)))
+            Choice(
+                title = "Turn on",
+                body = "Apps you installed some other way ask for one tap the first time. " +
+                    "Nightly builds stay manual.",
+                onClick = { onChoose(true) },
+            )
+            Spacer(Modifier.height(gridUnits(1.5f)))
+            Choice(
+                title = "Not now",
+                body = "Updates wait for you in the Updates tab, as they do now.",
+                onClick = { onChoose(false) },
+            )
+            Spacer(Modifier.height(gridUnits(1.5f)))
+            Text(
+                "You can change this later in Settings.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Light.ContentSecondary,
+            )
+            Spacer(Modifier.height(gridUnits(2f)))
+        }
+    }
+}
+
 @Composable
 private fun Choice(title: String, body: String, onClick: () -> Unit) {
     Column(

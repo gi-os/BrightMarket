@@ -57,6 +57,7 @@ object AutoUpdate {
     const val TAG = "BMAuto"
     private const val PREFS = "auto_update"
     private const val KEY_ENABLED = "enabled"
+    private const val KEY_ASKED = "asked"
     private const val KEY_SUMMARY = "summary"
     private const val KEY_SELF_PENDING = "self_pending"
     private const val KEY_INDEX_OVERRIDE = "debug_index_url"
@@ -77,8 +78,23 @@ object AutoUpdate {
 
     fun enabled(ctx: Context): Boolean = prefs(ctx).getBoolean(KEY_ENABLED, false)
 
+    /**
+     * Whether the one-time question has been answered. Choosing in Settings counts as an
+     * answer too, so nobody is asked about a switch they have already set.
+     */
+    fun asked(ctx: Context): Boolean = prefs(ctx).getBoolean(KEY_ASKED, false)
+
+    fun markAsked(ctx: Context) {
+        prefs(ctx).edit().putBoolean(KEY_ASKED, true).commit()
+    }
+
+    /** Debug builds only: ask again on the next launch. */
+    fun resetAsked(ctx: Context) {
+        prefs(ctx).edit().remove(KEY_ASKED).commit()
+    }
+
     fun setEnabled(ctx: Context, on: Boolean) {
-        prefs(ctx).edit().putBoolean(KEY_ENABLED, on).commit()
+        prefs(ctx).edit().putBoolean(KEY_ENABLED, on).putBoolean(KEY_ASKED, true).commit()
         sync(ctx)
     }
 
