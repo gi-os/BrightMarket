@@ -31,6 +31,14 @@ class InstallResultReceiver : BroadcastReceiver() {
         // in Updates for the next time somebody opens BrightMarket.
         if (status == PackageInstaller.STATUS_PENDING_USER_ACTION && unattended) {
             val session = intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1)
+            // Why Android wanted a tap, for the log: the one thing worth knowing when a
+            // phone does this to an app BrightMarket thought it owned.
+            android.util.Log.i(
+                AutoUpdate.TAG,
+                "system wants a tap for $target: " + (intent.extras?.keySet()?.joinToString { k ->
+                    "$k=${if (k == Intent.EXTRA_INTENT) "…" else intent.extras?.get(k)}"
+                } ?: ""),
+            )
             if (session >= 0) {
                 runCatching { context.packageManager.packageInstaller.abandonSession(session) }
             }

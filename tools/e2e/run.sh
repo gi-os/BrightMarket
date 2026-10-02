@@ -16,7 +16,9 @@ fail() {
   adb exec-out screencap -p > "$OUT/fail.png" 2>/dev/null || true
   adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb shell cat /sdcard/ui.xml > "$OUT/fail.xml" 2>/dev/null || true
   echo "--- BMAuto"; logs | tail -60
-  echo "--- PackageInstaller"; adb logcat -d | grep -i -E 'PackageInstaller|InstallerSession' | tail -40
+  echo "--- PackageInstaller"; adb logcat -d | grep -i -E 'PackageInstaller|InstallerSession|PackageManager|AppOps' | tail -60
+  echo "--- owned probe"; adb shell dumpsys package com.gios.e2e.owned | grep -i -E 'installer|owner|targetSdk|versionCode|initiat|originat'
+  echo "--- appops"; adb shell appops get "$BM" REQUEST_INSTALL_PACKAGES
   exit 1
 }
 ok() { PASS=$((PASS+1)); echo "ok $PASS - $*"; }
