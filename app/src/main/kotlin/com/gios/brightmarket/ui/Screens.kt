@@ -664,6 +664,16 @@ fun AppRow(
         Column(Modifier.weight(1f)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(app.name, style = MaterialTheme.typography.bodyLarge)
+            // A Lite build reads as a Lite build before anyone opens it: it sits
+            // in the list beside the full app, often with nearly the same name.
+            if (app.isLite) {
+                Spacer(Modifier.width(gridUnits(0.5f)))
+                Text(
+                    "LITE",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Light.ContentSecondary,
+                )
+            }
             val tag = when {
                 installedVersionCode == null -> null
                 updatable -> "UPDATE"
@@ -1204,6 +1214,45 @@ private fun StatRail(stats: List<Pair<String, String>>) {
 }
 
 /**
+ * The top of a Lite app's page: what it is, what it gives up, and the way to the full app.
+ *
+ * The button opens the full app's page rather than installing from here, the same way
+ * "Get BrightControl" does -- the install bar, its hash check and its sentence all live on
+ * that page, and a second install path would be a second thing to keep honest.
+ */
+@Composable
+private fun LiteNotice(
+    fullName: String?,
+    fullInstalled: Boolean,
+    onOpenFull: (() -> Unit)?,
+) {
+    Column {
+        Spacer(Modifier.height(gridUnits(0.6f)))
+        Text(
+            "LITE · LIGHT TOOL LIBRARY BUILD",
+            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.14f.em),
+            color = Light.Content,
+        )
+        Spacer(Modifier.height(gridUnits(0.3f)))
+        Text(
+            "Built only with Light's official SDK. It does less than " +
+                (fullName ?: "the full app") + ".",
+            style = MaterialTheme.typography.bodySmall,
+            color = Light.ContentSecondary,
+        )
+        if (fullName != null && onOpenFull != null) {
+            Spacer(Modifier.height(gridUnits(0.6f)))
+            ActionBar(
+                label = "Get $fullName",
+                hint = if (fullInstalled) "Installed" else "Full app",
+                units = 3.3f,
+                onClick = onOpenFull,
+            )
+        }
+    }
+}
+
+/**
  * The one thing on this page anyone came to press.
  *
  * Full width, 3.8 units tall, between two rules, and above the screenshots so
@@ -1337,6 +1386,19 @@ fun DetailScreen(
      * prerelease, because then there is nothing to choose between.
      */
     onToggleNightly: (() -> Unit)? = null,
+    /**
+     * On a Lite app, the full app it is cut down from, when the catalogue has it. The notice at
+     * the top still shows when this is null; only the button needs somewhere to go.
+     */
+    fullApp: App? = null,
+    /** Whether [fullApp] is on the phone, which changes only the hint on its button. */
+    fullInstalled: Boolean = false,
+    /** Open [fullApp]'s own page, where its install button lives. */
+    onOpenFull: (() -> Unit)? = null,
+    /** On a full app, its Light Tool Library build, when the catalogue has it. */
+    liteApp: App? = null,
+    /** Open [liteApp]'s own page. */
+    onOpenLite: (() -> Unit)? = null,
 ) {
     // -1 for "no screenshot open". Keyed on the package so opening a different
     // app's page can't inherit an index from the last one.
@@ -1433,6 +1495,18 @@ fun DetailScreen(
             )
 
             Column(Modifier.padding(horizontal = gridUnits(Grid.INSET))) {
+                // A Lite build says so before anything else on the page. Someone
+                // who came for the full app should find out here, not after the
+                // install, and the way to the full app is one tap from the notice.
+                if (app.isLite) {
+                    LiteNotice(
+                        fullName = fullApp?.name,
+                        fullInstalled = fullInstalled,
+                        onOpenFull = if (fullApp != null) onOpenFull else null,
+                    )
+                    Spacer(Modifier.height(gridUnits(1.2f)))
+                }
+
                 // The icon at four units, beside the summary rather than above it.
                 // The name is already in the top bar; repeating it under a centred
                 // mark would push the install button off the first screen, and that
@@ -1463,6 +1537,19 @@ fun DetailScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = Light.ContentSecondary,
                         )
+
+                        // The other direction, said quietly: the full app is what
+                        // this page is for, and the Lite build is only a pointer.
+                        if (liteApp != null && onOpenLite != null) {
+                            Text(
+                                "Also as a Light Tool Library build: ${liteApp.name}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Light.ContentSecondary,
+                                modifier = Modifier
+                                    .lightClickable(onClick = onOpenLite)
+                                    .padding(top = gridUnits(0.5f), bottom = gridUnits(0.3f)),
+                            )
+                        }
                     }
                 }
 

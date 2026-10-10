@@ -4,6 +4,18 @@ The top section is published as the body of the next GitHub Release. Add a new
 section above the previous one when shipping something worth telling people
 about; CI reads only down to the second `## ` heading.
 
+## v1.35
+
+**Lite apps say they are Lite, and point you to the full app.**
+
+Some apps now come in a Lite version too. A Lite app is built only with Light's official SDK,
+for the Light Tool Library, so it does less than the full app.
+
+- A Lite app's page says so at the top, with a **GET** button for the full app. It opens the
+  full app's page, and you install from there as usual.
+- A full app's page has one line that links to its Lite version.
+- Lite apps show a small LITE tag in the list.
+
 ## v1.34
 
 **BrightMarket asks once whether you want automatic updates.**

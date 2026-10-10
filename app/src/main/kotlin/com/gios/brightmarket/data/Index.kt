@@ -104,7 +104,17 @@ data class App(
      * Installing it by hand still works. See [com.gios.brightmarket.update.AutoUpdate].
      */
     val hold: Boolean = false,
-)
+    /**
+     * On a Lite app -- a cut-down build made only with Light's official SDK, for the Light Tool
+     * Library -- the applicationId of the full app it comes from. Blank on everything else.
+     */
+    val fullVersion: String = "",
+    /** On a full app, the applicationId of its Light Tool Library build. Blank when it has none. */
+    val liteVersion: String = "",
+) {
+    /** True for a Light Tool Library build of another app in the catalogue. */
+    val isLite: Boolean get() = fullVersion.isNotBlank()
+}
 
 /** A prerelease build, checked exactly as hard as a stable one. */
 data class Preview(
@@ -317,6 +327,10 @@ object Index {
                 firstSeen = o.optString("firstSeen", ""),
                 signer = o.optString("signer", ""),
                 hold = o.optBoolean("hold", false),
+                // An app cannot be its own Lite or full build; a self-reference
+                // would make the page link to itself, so it reads as absent.
+                fullVersion = linkedPkg(o, "fullVersion"),
+                liteVersion = linkedPkg(o, "liteVersion"),
                 screenshots = o.optJSONArray("screenshots")?.let { arr ->
                     (0 until arr.length()).mapNotNull { j ->
                         arr.optJSONObject(j)?.optString("url")?.takeIf { it.isNotBlank() }
@@ -347,6 +361,25 @@ object Index {
             )
         }
     }
+
+    /**
+     * An optional applicationId field. Absent, null, non-string, blank, or the app's own
+     * package all read as "none": an old index carries neither key, and the UI only has to
+     * check for blank.
+     */
+    private fun linkedPkg(o: JSONObject, key: String): String {
+        if (o.isNull(key)) return ""
+        val v = o.opt(key) as? String ?: return ""
+        val pkg = v.trim()
+        return if (pkg == o.optString("pkg")) "" else pkg
+    }
+
+    /**
+     * The catalogue entry a Lite/full link points at, or null when it is blank or that app
+     * is not in the index right now.
+     */
+    fun linked(apps: List<App>, pkg: String): App? =
+        if (pkg.isBlank()) null else apps.firstOrNull { it.pkg == pkg }
 
     fun fetch(url: String): List<App> {
         val conn = (URL(url).openConnection() as HttpURLConnection).apply {

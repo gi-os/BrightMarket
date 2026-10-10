@@ -357,6 +357,18 @@ class MainActivity : ComponentActivity() {
                             if (control != null) selected = control
                             else toast("BrightControl isn't in the catalog right now.")
                         },
+                        // Lite and full builds point at each other's pages, not at an
+                        // install: each page has its own button and its own hash.
+                        fullApp = Index.linked(apps, app.fullVersion),
+                        fullInstalled = app.fullVersion.isNotBlank() &&
+                            installed.containsKey(app.fullVersion),
+                        onOpenFull = {
+                            Index.linked(apps, app.fullVersion)?.let { selected = it; progress = null }
+                        },
+                        liteApp = Index.linked(apps, app.liteVersion),
+                        onOpenLite = {
+                            Index.linked(apps, app.liteVersion)?.let { selected = it; progress = null }
+                        },
                     )
                     return@BrightMarketTheme
                 }
