@@ -77,7 +77,7 @@ object Pulse {
      * because a failure here is not the user's problem and must never reach the
      * screen. A missed send is retried on the next launch.
      */
-    fun sync(ctx: Context, catalogue: Map<String, String>) {
+    fun sync(ctx: Context, catalogue: Map<String, Signer.Pin>) {
         if (!enabled(ctx) || catalogue.isEmpty()) return
         val app = ctx.applicationContext
         Thread {
@@ -85,7 +85,7 @@ object Pulse {
         }.apply { isDaemon = true }.start()
     }
 
-    internal fun syncBlocking(ctx: Context, catalogue: Map<String, String>) {
+    internal fun syncBlocking(ctx: Context, catalogue: Map<String, Signer.Pin>) {
         val current = scan(ctx, catalogue)
         val previous = readMap(prefs(ctx).getString(KEY_SNAPSHOT, null))
 
@@ -115,12 +115,12 @@ object Pulse {
      *
      * An unreadable certificate counts, deliberately. See [Signer]: not knowing is not evidence.
      */
-    private fun scan(ctx: Context, catalogue: Map<String, String>): Map<String, String> {
+    private fun scan(ctx: Context, catalogue: Map<String, Signer.Pin>): Map<String, String> {
         val pm = ctx.packageManager
         val out = LinkedHashMap<String, String>()
         for ((pkg, signer) in catalogue) {
             val info = runCatching { pm.getPackageInfo(pkg, 0) }.getOrNull() ?: continue
-            if (Signer.foreign(signer, Signer.of(ctx, pkg))) continue
+            if (signer.foreign(Signer.of(ctx, pkg))) continue
             out[pkg] = version(info.versionName)
         }
         return out
@@ -236,7 +236,7 @@ object Pulse {
      * rather than described: a sentence about anonymity is worth less than the
      * literal bytes.
      */
-    fun preview(ctx: Context, catalogue: Map<String, String>): String {
+    fun preview(ctx: Context, catalogue: Map<String, Signer.Pin>): String {
         val outbox = JSONArray(prefs(ctx).getString(KEY_OUTBOX, "[]"))
         if (outbox.length() > 0) return JSONObject().put("v", 1).put("events", outbox).toString(2)
         // Nothing queued, so show the shape the next change would take, using

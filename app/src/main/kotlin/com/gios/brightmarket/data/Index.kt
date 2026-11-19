@@ -111,7 +111,11 @@ data class App(
     val fullVersion: String = "",
     /** On a full app, the applicationId of its Light Tool Library build. Blank when it has none. */
     val liteVersion: String = "",
+    /** Original signer pin for an intentional rotation, absent on ordinary listings. */
+    val signerRoot: String? = null,
 ) {
+    val signingPin: Signer.Pin get() = Signer.Pin(signer, signerRoot)
+
     /** True for a Light Tool Library build of another app in the catalogue. */
     val isLite: Boolean get() = fullVersion.isNotBlank()
 }
@@ -272,7 +276,7 @@ object Index {
                     target = app.target(nightlyFor(app.pkg)),
                     installedVersionName = versionNameOf(app.pkg),
                     installedByMarket = marketVersionOf(app.pkg),
-                    foreign = Signer.foreign(app.signer, signerOf(app.pkg)),
+                    foreign = app.signingPin.foreign(signerOf(app.pkg)),
                 )
             }
         }
@@ -326,6 +330,7 @@ object Index {
                 users = o.optInt("users", 0),
                 firstSeen = o.optString("firstSeen", ""),
                 signer = o.optString("signer", ""),
+                signerRoot = if (o.has("signerRoot")) o.optString("signerRoot", "") else null,
                 hold = o.optBoolean("hold", false),
                 // An app cannot be its own Lite or full build; a self-reference
                 // would make the page link to itself, so it reads as absent.

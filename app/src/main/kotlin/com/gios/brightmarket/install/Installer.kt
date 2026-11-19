@@ -3,9 +3,11 @@ package com.gios.brightmarket.install
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageInfo
 import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
 import com.gios.brightmarket.data.InstalledVersions
+import com.gios.brightmarket.data.Signer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
@@ -57,11 +59,10 @@ object Installer {
      * manifest-guessing: the numbers are the ones PackageManager will use.
      */
     fun readApk(ctx: Context, file: File): Pair<String, Long>? =
-        runCatching {
-            val info = ctx.packageManager.getPackageArchiveInfo(file.absolutePath, 0)
-                ?: return null
-            info.packageName to info.longVersionCode
-        }.getOrNull()
+        readArchive(ctx, file, 0)?.let { it.packageName to it.longVersionCode }
+
+    private fun readArchive(ctx: Context, file: File, flags: Int): PackageInfo? =
+        runCatching { ctx.packageManager.getPackageArchiveInfo(file.absolutePath, flags) }.getOrNull()
 
     /** True when [versionCode] is newer than what's on the device. */
     fun updateAvailable(ctx: Context, pkg: String, versionCode: Long): Boolean {
@@ -110,6 +111,7 @@ object Installer {
         apkUrl: String,
         expectedSha256: String?,
         pkg: String,
+        signingPin: Signer.Pin? = null,
         /**
          * The release string being installed, recorded once the install lands so
          * later checks can compare like with like. See [InstalledVersions].
@@ -137,37 +139,32 @@ object Installer {
          */
         unattended: Boolean = false,
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        // Named per install, not per package. `pkg` is empty for a tracked repo
-        // whose applicationId isn't known yet, which made the file ".apk" --
-        // one shared name for every unlisted download, so two of them running
-        // near each other wrote over one another.
-        val apk = File(ctx.cacheDir, "dl-" + (pkg.ifBlank { apkUrl }).hashCode().toUInt().toString(16) + ".apk")
+        var downloadFile: File? = null
         runCatching {
+            // A parallel install must not overwrite the APK between verification and commit.
+            val apk = File.createTempFile("dl-", ".apk", ctx.cacheDir).also { downloadFile = it }
             download(apkUrl, apk, onProgress)
 
             if (expectedSha256 != null) {
-            onProgress(Progress.Verifying)
-            val actual = sha256(apk)
-            if (!actual.equals(expectedSha256, ignoreCase = true)) {
-                apk.delete()
-                // The index is a static file on GitHub Pages; the hash is the
-                // only thing making it trustworthy. A mismatch is never worth
-                // "probably fine".
-                error("Download didn't match the expected checksum, so it wasn't installed.")
-            }
+                onProgress(Progress.Verifying)
+                val actual = sha256(apk)
+                if (!actual.equals(expectedSha256, ignoreCase = true)) {
+                    error("Download didn't match the expected checksum, so it wasn't installed.")
+                }
             }
 
             // Learn what this APK actually is before handing it to the
             // installer -- for a tracked repo this is the only chance to find
             // out, and it is what makes future update checks possible.
             // Read once: this parses the whole archive, and these are 60MB files.
-            val identity = readApk(ctx, apk)
-            identity?.let { (id, code) -> onIdentified(id, code) }
+            val checkSigner = signingPin?.requiresVerification == true
+            val flags = if (checkSigner) PackageManager.GET_SIGNING_CERTIFICATES else 0
+            val archive = readArchive(ctx, apk, flags)
 
             // An APK the package manager cannot parse is not going to install,
             // and saying so here is far more use than the installer's own
             // "There was a problem parsing the package".
-            if (identity == null) {
+            if (archive == null) {
                 error("That download isn't a readable Android package. It may have arrived incomplete — try again.")
             }
 
@@ -184,15 +181,22 @@ object Installer {
             // entirely), and asset order is not guaranteed stable release to
             // release. Catching the mismatch here turns that into a message
             // that says what actually happened.
-            if (pkg.isNotBlank() && identity.first != pkg) {
+            if (pkg.isNotBlank() && archive.packageName != pkg) {
                 error(
-                    "This release is a different app (${identity.first}) than the one being " +
+                    "This release is a different app (${archive.packageName}) than the one being " +
                         "tracked ($pkg). Forget it and add it again to switch to the new one."
                 )
             }
 
+            if (signingPin?.requiresVerification == true &&
+                !signingPin.accepts(Signer.verifiedHistory(archive.signingInfo))
+            ) {
+                error("This APK doesn't match the catalogue's signing key or required rotation lineage.")
+            }
+            onIdentified(archive.packageName, archive.longVersionCode)
+
             onProgress(Progress.AwaitingConfirmation)
-            val target = pkg.ifBlank { identity.first }
+            val target = pkg.ifBlank { archive.packageName }
             releaseVersion?.let { InstalledVersions.markPending(ctx, target, it) }
             // Registered BEFORE the commit. The result broadcast can arrive on
             // the very next tick, and a listener attached afterwards would miss
@@ -215,19 +219,10 @@ object Installer {
                     null
                 }
                 if (outcome != null && !outcome.success) {
-                    apk.delete()
                     error(outcome.message)
                 }
             }
-            apk.delete()
-            // delete() returns Boolean, which would make this Result<Boolean>.
-            // The contract is Result<Unit>, and whether the temp copy was still
-            // on disk is not something a caller should branch on.
-            Unit
-        }.onFailure {
-            // A partial file left in the cache is how a retry inherits the
-            // failure it was meant to escape.
-            apk.delete()
+        }.also { downloadFile?.delete() }.onFailure {
             onProgress(Progress.Failed(it.message ?: "install failed"))
         }
     }
