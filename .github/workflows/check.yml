@@ -48,7 +48,6 @@ jobs:
           # light-common resolves from GitHub Packages, which has no anonymous read.
           GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPORT_TOKEN: ${{ secrets.REPORT_TOKEN }}
 
       # assembleRelease rather than a bare compile: manifest merge and resource processing are
       # where a missing class or a permission that does not exist actually surface, and a
@@ -58,7 +57,6 @@ jobs:
         env:
           GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPORT_TOKEN: ${{ secrets.REPORT_TOKEN }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
 
       # No artifact upload here. This job's whole purpose is "does it compile",
