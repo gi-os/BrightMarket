@@ -268,6 +268,7 @@ object AutoUpdate {
                 apkUrl = t.apkUrl,
                 expectedSha256 = t.sha256,
                 pkg = app.pkg,
+                signingPin = app.signingPin,
                 releaseVersion = t.version,
                 awaitResult = true,
                 unattended = true,

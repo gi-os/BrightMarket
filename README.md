@@ -107,9 +107,36 @@ and it is the thing that makes a download trustworthy — not the source it came
 Repos you add yourself by QR have no hash, because nothing generated one, and they
 are marked `UNLISTED` so the difference is visible rather than assumed.
 
-The signing certificate of every listed app is pinned the first time it is indexed,
-and the build fails if it changes, so an app cannot quietly change hands. None of
-this is a code review.
+The index pins each listed app's signing certificate on first sight and keeps the
+previous release on an unexpected change. BrightMarket checks the downloaded APK
+against that pin before sending it to Android's installer. None of this is a code review.
+
+### Rotating a listed app's key
+
+1. Verify the exact release APK has the expected application ID, replacement
+   certificate, and APK Signature Scheme v3 proof of rotation from the original
+   certificate. For a v3-only release targeting all BrightMarket devices, use
+   `apksigner` with `--rotation-min-sdk-version 28` when signing. Check that Android
+   can update the original install in place; the lineage must grant installed-data
+   capability to the old signer. Do not grant rollback to a retired key.
+2. Ship the rotation-aware BrightMarket client before changing the index. Older
+   clients classify an install signed by the original key as foreign once the
+   index's `signer` changes.
+3. In the index builder, add a `HANDOVERS` row for the exact tuple
+   `(applicationId, previous_sha256, replacement_sha256, reason)`. Extend the
+   builder to emit `signerRoot: original_sha256` for this package only when its
+   emitted `signer` equals `replacement_sha256` (for example, append a fifth
+   field containing `original_sha256`). On a later rotation, change the previous
+   and replacement pins but keep the same original root. Use lowercase hex without colons.
+   Keep legacy handovers without a lineage unchanged. Let the builder generate
+   `index-v1.json`, including the new APK's checksum; don't clear the old pin
+   or manually edit the generated index.
+
+For a rotation entry, only the replacement certificate may sign a download, and
+Android must verify its lineage starts at `signerRoot`. A rotated update must
+extend the installed signing history, not switch to a sibling branch. The root
+identifies existing installs but cannot sign the offered APK or nominate a
+different successor. This applies to stable and nightly downloads alike.
 
 A silent install path is planned — an embedded ADB client pairing the phone to its
 own `adbd` over loopback, which gets shell uid and therefore `INSTALL_PACKAGES`. The

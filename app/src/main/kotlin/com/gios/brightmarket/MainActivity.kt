@@ -468,7 +468,7 @@ class MainActivity : ComponentActivity() {
                             nightly = nightly,
                             nightlyOverrides = nightlyChoices.size,
                             pulseEnabled = pulse,
-                            pulseSample = { Pulse.preview(this@MainActivity, apps.associate { a -> a.pkg to a.signer }) },
+                            pulseSample = { Pulse.preview(this@MainActivity, apps.associate { a -> a.pkg to a.signingPin }) },
                             onTogglePulse = {
                                 val next = !pulse
                                 Pulse.setEnabled(this@MainActivity, next)
@@ -871,7 +871,7 @@ class MainActivity : ComponentActivity() {
                     // Anonymous install counting, scoped to the catalogue that
                     // just arrived. Sends nothing at all on the runs where
                     // nothing changed, which is nearly all of them.
-                    Pulse.sync(this@MainActivity, it.associate { a -> a.pkg to a.signer })
+                    Pulse.sync(this@MainActivity, it.associate { a -> a.pkg to a.signingPin })
                     pendingPkg?.let { pkg ->
                         selected = apps.firstOrNull { a -> a.pkg == pkg }
                         if (selected == null) toast("That app isn't in the index.")
@@ -1001,6 +1001,7 @@ class MainActivity : ComponentActivity() {
                 apkUrl = t.apkUrl,
                 expectedSha256 = t.sha256,
                 pkg = app.pkg,
+                signingPin = app.signingPin,
                 releaseVersion = t.version,
                 onProgress = { progress = it },
             ).onSuccess {
@@ -1045,6 +1046,7 @@ class MainActivity : ComponentActivity() {
                     apkUrl = t.apkUrl,
                     expectedSha256 = t.sha256,
                     pkg = app.pkg,
+                    signingPin = app.signingPin,
                     // Was omitted, so a batch update installed the new release
                     // and recorded nothing -- and the row it had just updated
                     // went on offering the same update, because the record of
