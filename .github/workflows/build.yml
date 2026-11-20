@@ -22,6 +22,10 @@ permissions:
 
 jobs:
   build:
+    # KEYSTORE_B64 and KEYSTORE_PASSWORD live only in the `release` environment, which is
+    # restricted to main. As repository secrets, any branch's workflow could read them.
+    if: github.ref == 'refs/heads/main'
+    environment: release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -84,9 +88,11 @@ jobs:
       # nowhere else; the path is gitignored so a local checkout can't commit it
       # back by accident.
       - name: Restore signing keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
         run: |
           mkdir -p keystore
-          echo "${{ secrets.KEYSTORE_B64 }}" | base64 -d > keystore/brightmarket.jks
+          printf '%s' "$KEYSTORE_B64" | base64 -d > keystore/brightmarket.jks
           # A missing or truncated secret would otherwise fall through to an
           # unsigned release that the fingerprint step rejects with a confusing
           # message. Fail here, where the cause is obvious.

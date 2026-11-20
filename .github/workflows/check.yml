@@ -49,7 +49,8 @@ jobs:
           GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # assembleRelease rather than a bare compile: manifest merge and resource processing are
+      # assembleRelease rather than a bare compile (unsigned here: the release key is only in
+      # the main-only `release` environment): manifest merge and resource processing are
       # where a missing class or a permission that does not exist actually surface, and a
       # Kotlin compile never reaches either.
       - name: Build APKs
@@ -57,7 +58,6 @@ jobs:
         env:
           GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
 
       # No artifact upload here. This job's whole purpose is "does it compile",
       # and the APKs it produced were signed release builds of an unreviewed PR
