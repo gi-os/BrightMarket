@@ -30,34 +30,38 @@ import java.security.MessageDigest
  */
 object Signer {
 
-    /** SHA-256 of [pkg]'s signing certificate, lowercase hex, or null if it cannot be read. */
-    fun of(ctx: Context, pkg: String): String? = runCatching {
+    /** Verified signing history of the installed package, or null if it cannot be read. */
+    fun of(ctx: Context, pkg: String): List<String>? = runCatching {
         val info = ctx.packageManager.getPackageInfo(pkg, PackageManager.GET_SIGNING_CERTIFICATES)
-        info.signingInfo?.apkContentsSigners?.firstOrNull()?.let { sha256(it.toByteArray()) }
+        verifiedHistory(info.signingInfo)
     }.getOrNull()
 
     /** Oldest to current, only for a single signer as reported by Android's verifier. */
     fun verifiedHistory(signing: SigningInfo?): List<String>? {
-        if (signing == null || signing.hasMultipleSigners()) return null
+        if (signing == null) return null
+        if (signing.hasMultipleSigners()) return emptyList()
         return signing.signingCertificateHistory?.map { sha256(it.toByteArray()) }
     }
 
     data class Pin(val current: String?, val root: String? = null) {
         val requiresVerification: Boolean get() = !current.isNullOrBlank() || root != null
 
-        /** The pre-rotation key still identifies old installs but cannot authorize downloads. */
-        fun foreign(installed: String?): Boolean {
-            if (current.isNullOrBlank() || installed.isNullOrBlank()) return false
-            return !current.equals(installed, ignoreCase = true) &&
-                !root.equals(installed, ignoreCase = true)
+        /** Only the installed history is known here; branch compatibility is checked on download. */
+        fun foreign(installed: List<String>?): Boolean {
+            if (current.isNullOrBlank() || installed == null) return false
+            return !current.equals(installed.lastOrNull(), ignoreCase = true) &&
+                (root == null || !root.equals(installed.firstOrNull(), ignoreCase = true))
         }
 
         /** [history] must come from Android's APK signature verifier, not the index. */
-        fun accepts(history: List<String>?): Boolean {
+        fun accepts(history: List<String>?, installed: List<String>? = null): Boolean {
             if (current.isNullOrBlank() || history.isNullOrEmpty()) return false
             if (!current.equals(history.last(), ignoreCase = true)) return false
-            return root == null ||
-                (history.size > 1 && root.equals(history.first(), ignoreCase = true))
+            if (root == null) return true
+            if (history.size < 2 || !root.equals(history.first(), ignoreCase = true)) return false
+            // An APK on a sibling branch may share the original cert but cannot update this copy.
+            return installed == null || (installed.isNotEmpty() && installed.size <= history.size &&
+                installed.indices.all { installed[it].equals(history[it], ignoreCase = true) })
         }
     }
 

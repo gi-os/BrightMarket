@@ -123,17 +123,19 @@ against that pin before sending it to Android's installer. None of this is a cod
    clients classify an install signed by the original key as foreign once the
    index's `signer` changes.
 3. In the index builder, add a `HANDOVERS` row for the exact tuple
-   `(applicationId, original_sha256, replacement_sha256, reason)`. Extend the
+   `(applicationId, previous_sha256, replacement_sha256, reason)`. Extend the
    builder to emit `signerRoot: original_sha256` for this package only when its
    emitted `signer` equals `replacement_sha256` (for example, append a fifth
-   boolean to that row to mark a rotation). Use lowercase hex without colons.
+   field containing `original_sha256`). On a later rotation, change the previous
+   and replacement pins but keep the same original root. Use lowercase hex without colons.
    Keep legacy handovers without a lineage unchanged. Let the builder generate
    `index-v1.json`, including the new APK's checksum; don't clear the old pin
    or manually edit the generated index.
 
 For a rotation entry, only the replacement certificate may sign a download, and
-Android must verify its lineage starts at `signerRoot`. The root still identifies
-existing installs but is not allowed to sign the offered APK or nominate a
+Android must verify its lineage starts at `signerRoot`. A rotated update must
+extend the installed signing history, not switch to a sibling branch. The root
+identifies existing installs but cannot sign the offered APK or nominate a
 different successor. This applies to stable and nightly downloads alike.
 
 A silent install path is planned — an embedded ADB client pairing the phone to its

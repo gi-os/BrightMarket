@@ -264,8 +264,8 @@ object Index {
         versionNameOf: (String) -> String? = { null },
         /** What BrightMarket recorded installing for a package. */
         marketVersionOf: (String) -> String? = { null },
-        /** The certificate the installed copy is signed with, when it can be read. */
-        signerOf: (String) -> String? = { null },
+        /** The installed copy's signing history, when it can be read. */
+        signerOf: (String) -> List<String>? = { null },
     ): Triple<List<Installed>, List<Installed>, List<App>> {
         val present = apps.mapNotNull { app ->
             installed[app.pkg]?.let {

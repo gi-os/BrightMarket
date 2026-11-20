@@ -21,15 +21,16 @@ class SignerTest {
     private val ours = "7844d8cc52fc12b5a2b5879b028605d90391a0a06cc4d87ef92a59350226d203"
     private val theirs = "355710cb7184d872ec40b9d060b7687a52b675f0000000000000000000000000"
     private val rotated = "42".repeat(32)
+    private val intermediate = "67".repeat(32)
     private val rotation = Signer.Pin(rotated, root = ours)
 
     @Test fun `a different certificate is foreign`() {
-        assertTrue(Signer.Pin(ours).foreign(theirs))
+        assertTrue(Signer.Pin(ours).foreign(listOf(theirs)))
     }
 
     @Test fun `the same certificate is not, whatever the case`() {
-        assertFalse(Signer.Pin(ours).foreign(ours))
-        assertFalse(Signer.Pin(ours.uppercase()).foreign(ours))
+        assertFalse(Signer.Pin(ours).foreign(listOf(ours)))
+        assertFalse(Signer.Pin(ours.uppercase()).foreign(listOf(ours)))
     }
 
     /**
@@ -38,10 +39,9 @@ class SignerTest {
      * platform quirk stops updates for everybody.
      */
     @Test fun `an unknown certificate on either side is never foreign`() {
-        assertFalse(Signer.Pin(null).foreign(theirs))
-        assertFalse(Signer.Pin("").foreign(theirs))
+        assertFalse(Signer.Pin(null).foreign(listOf(theirs)))
+        assertFalse(Signer.Pin("").foreign(listOf(theirs)))
         assertFalse(Signer.Pin(ours).foreign(null))
-        assertFalse(Signer.Pin(ours).foreign(""))
         assertFalse(Signer.Pin(null).foreign(null))
     }
 
@@ -56,7 +56,17 @@ class SignerTest {
 
     @Test fun `the pinned new signer descends from the original signer`() {
         assertTrue(rotation.accepts(listOf(ours.uppercase(), rotated.uppercase())))
-        assertTrue(rotation.accepts(listOf(ours, "67".repeat(32), rotated)))
+        assertTrue(rotation.accepts(listOf(ours, intermediate, rotated)))
+    }
+
+    @Test fun `an update must extend rather than replace the installed lineage`() {
+        val update = listOf(ours, intermediate, rotated)
+        assertTrue(rotation.accepts(update, listOf(ours)))
+        assertTrue(rotation.accepts(update, listOf(ours, intermediate)))
+        assertTrue(rotation.accepts(update, update))
+        assertFalse(rotation.accepts(update, listOf(ours, theirs)))
+        assertFalse(rotation.accepts(update, listOf(ours, rotated, theirs)))
+        assertFalse(rotation.accepts(update, emptyList()))
     }
 
     @Test fun `the new signer without the pinned root is refused`() {
@@ -102,14 +112,14 @@ class SignerTest {
             "\"signer\":\"$rotated\",\"signerRoot\":\"$ours\"",
         ))
         assertEquals(rotation, apps.single().signingPin)
-        for (cert in listOf(ours, rotated)) {
+        for (history in listOf(listOf(ours), listOf(ours, intermediate), listOf(ours, intermediate, rotated))) {
             val (updates, _, _) = Index.partitionInstalled(
-                apps, mapOf("app.lightphonekeyboard" to 13L), signerOf = { cert },
+                apps, mapOf("app.lightphonekeyboard" to 13L), signerOf = { history },
             )
             assertFalse(updates.single().foreign)
         }
         val (updates, current, _) = Index.partitionInstalled(
-            apps, mapOf("app.lightphonekeyboard" to 13L), signerOf = { theirs },
+            apps, mapOf("app.lightphonekeyboard" to 13L), signerOf = { listOf(theirs) },
         )
         assertTrue(updates.isEmpty())
         assertTrue(current.single().foreign)
@@ -121,7 +131,7 @@ class SignerTest {
         val (updates, current, _) = Index.partitionInstalled(
             apps,
             mapOf("app.lightphonekeyboard" to 13L),
-            signerOf = { theirs },
+            signerOf = { listOf(theirs) },
         )
         assertEquals(0, updates.size)
         assertEquals(1, current.size)
@@ -133,7 +143,7 @@ class SignerTest {
         val (updates, _, _) = Index.partitionInstalled(
             apps,
             mapOf("app.lightphonekeyboard" to 13L),
-            signerOf = { ours },
+            signerOf = { listOf(ours) },
         )
         assertEquals(1, updates.size)
         assertFalse(updates.single().foreign)

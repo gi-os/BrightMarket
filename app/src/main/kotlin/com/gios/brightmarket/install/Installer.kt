@@ -188,10 +188,11 @@ object Installer {
                 )
             }
 
-            if (signingPin?.requiresVerification == true &&
-                !signingPin.accepts(Signer.verifiedHistory(archive.signingInfo))
-            ) {
-                error("This APK doesn't match the catalogue's signing key or required rotation lineage.")
+            if (signingPin?.requiresVerification == true) {
+                val installed = if (signingPin.root != null) Signer.of(ctx, archive.packageName) else null
+                if (!signingPin.accepts(Signer.verifiedHistory(archive.signingInfo), installed)) {
+                    error("This APK doesn't match the catalogue's signing key or required rotation lineage.")
+                }
             }
             onIdentified(archive.packageName, archive.longVersionCode)
 
