@@ -113,7 +113,7 @@ dependencies {
     // The shared Light layer: the hardware wheel and shake-to-report, which
     // every other app in the portfolio already uses. Reimplementing either here
     // would be a second copy to keep in step with the first.
-    implementation("com.gios:light-common:1.2.1")
+    implementation("com.gios:light-common:1.11.0")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
