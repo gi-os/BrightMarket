@@ -48,7 +48,6 @@ jobs:
           # light-common resolves from GitHub Packages, which has no anonymous read.
           GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPORT_TOKEN: ${{ secrets.REPORT_TOKEN }}
 
       # assembleRelease rather than a bare compile (unsigned here: the release key is only in
       # the main-only `release` environment): manifest merge and resource processing are
@@ -59,7 +58,6 @@ jobs:
         env:
           GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPORT_TOKEN: ${{ secrets.REPORT_TOKEN }}
 
       # No artifact upload here. This job's whole purpose is "does it compile",
       # and the APKs it produced were signed release builds of an unreviewed PR

@@ -83,7 +83,6 @@ jobs:
           # light-common resolves from GitHub Packages, which has no anonymous read.
           GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPORT_TOKEN: ${{ secrets.REPORT_TOKEN }}
 
       # The signing key is a secret, not a file in the repo. Written here and
       # nowhere else; the path is gitignored so a local checkout can't commit it
@@ -105,7 +104,6 @@ jobs:
           # light-common resolves from GitHub Packages, which has no anonymous read.
           GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPORT_TOKEN: ${{ secrets.REPORT_TOKEN }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
 
       - name: Collect APK

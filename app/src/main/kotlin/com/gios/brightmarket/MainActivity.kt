@@ -200,7 +200,8 @@ class MainActivity : ComponentActivity() {
             context = this,
             appName = "BrightMarket",
             label = "market",
-            token = BuildConfig.REPORT_TOKEN,
+            // No key on the phone: reports queue until light-common 1.11.0, which posts them to the report relay.
+            token = "",
         )
 
         // Registered for the activity's whole life, not just while resumed.
