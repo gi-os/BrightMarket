@@ -127,9 +127,49 @@ install over a release build, and that is deliberate — a build that isn't the 
 thing should say so at install time rather than pretend.
 
 The release key lives only in CI, as the `KEYSTORE_B64` and `KEYSTORE_PASSWORD`
-secrets. Its certificate SHA-256 is pinned in `signing-fingerprint.txt` and CI fails
-if the built APK doesn't match, because a changed certificate reaches users as an
-opaque `Failure: Invalid` and nothing else. Exactly one APK is attached per release.
+secrets of the `release` GitHub environment, which only `main` can enter. Its
+certificate SHA-256 is pinned in `signing-fingerprint.txt` and CI fails if the built
+APK doesn't match, because a changed certificate reaches users as an opaque
+`Failure: Invalid` and nothing else. Exactly one APK is attached per release. Branch
+and pull-request builds (the **Check** workflow) never see the key and build an
+unsigned release APK.
+
+The key in this repository's history (`keystore/brightmarket.jks`, certificate
+SHA-256 `6F:C7:CC:CF:…:25:11:A4`) was retired in v1.10. The current key
+(`C1:50:78:BC:…:55:0D:F6`, the one the catalog pins) has never been committed, so it
+does not need rotating; it only needed to stop being readable from every branch.
+
+### Moving the release secrets into the `release` environment
+
+Repository secrets are readable by a workflow on any branch, so anyone who can push a
+branch could print the release key. Before merging the change that added
+`environment: release` to `build.yml`:
+
+1. Disable [Build & Release APK](https://github.com/gi-os/BrightMarket/actions/workflows/build.yml)
+   (**…** > **Disable workflow**). A push to `main` publishes a build, and a job that
+   names an environment that does not exist yet creates it with no branch restriction.
+2. In [environment settings](https://github.com/gi-os/BrightMarket/settings/environments),
+   create an environment named `release`. Under **Deployment branches and tags** choose
+   **Selected branches and tags** and add one **Branch** rule, `main`, with no tag rules.
+3. Add the two existing values to that environment only, from the same offline copy of
+   the current key you created them from (GitHub never shows a secret's value again):
+
+   ```sh
+   base64 -w 0 brightmarket.jks | gh secret set KEYSTORE_B64 --env release --repo gi-os/BrightMarket
+   gh secret set KEYSTORE_PASSWORD --env release --repo gi-os/BrightMarket   # prompts for it
+   ```
+
+4. Delete the repository-level copies, which otherwise stay readable from any branch:
+
+   ```sh
+   gh secret delete KEYSTORE_B64 --repo gi-os/BrightMarket
+   gh secret delete KEYSTORE_PASSWORD --repo gi-os/BrightMarket
+   ```
+
+5. Merge, re-enable the workflow, and publish when you mean to (the next push to `main`
+   or a manual run). Its **Verify signing certificate** step must still print
+   `c15078bc…550df6`; if it does, nothing changes for installed copies or the catalog,
+   and no BrightMarket handover is needed.
 
 > **If you installed BrightMarket before v1.10:** that build was signed with a key
 > committed to this repository, password and all, which meant anyone could produce an
